@@ -7,11 +7,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import SCENARIO_FULL
+from .const import SCENARIO_FULL, SCENARIO_QUICK_TRIP
 from .coordinator import EvChargePlannerConfigEntry, EvChargePlannerCoordinator
 from .entity import EvChargePlannerEntity
 
 FULL_OPTION = "Full"
+QUICK_TRIP_OPTION = "Quick trip"
 
 
 async def async_setup_entry(
@@ -26,9 +27,14 @@ async def async_setup_entry(
 class DeadlineScenarioSelect(EvChargePlannerEntity, SelectEntity, RestoreEntity):
     """Which scenario the deadline sensors plan for."""
 
+    _platform_domain = "select"
+
     def __init__(self, coordinator: EvChargePlannerCoordinator) -> None:
         super().__init__(coordinator, "deadline_scenario")
-        self._ids_by_option = {FULL_OPTION: SCENARIO_FULL} | {
+        self._ids_by_option = {
+            FULL_OPTION: SCENARIO_FULL,
+            QUICK_TRIP_OPTION: SCENARIO_QUICK_TRIP,
+        } | {
             trip["title"]: subentry_id
             for subentry_id, trip in coordinator.trips.items()
         }

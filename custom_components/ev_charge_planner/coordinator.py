@@ -38,10 +38,12 @@ from .const import (
     CONF_ROUND_TRIP,
     CONF_SOC_ENTITY,
     CONF_SOC_RESERVE_PCT,
+    CONF_SOLAR_SHARE_PCT,
     CONF_WALLBOX_POWER_ENTITY,
     DEFAULTS,
     DOMAIN,
     SCENARIO_FULL,
+    SCENARIO_QUICK_TRIP,
     SUBENTRY_TRIP,
     UPDATE_INTERVAL,
 )
@@ -80,6 +82,7 @@ class ScenarioResult:
     charge_time_grid: timedelta
     charge_time_pv: timedelta | None
     charge_time_pv_extrapolated: bool
+    pv_grid_kwh: float | None
     ready: bool
 
 
@@ -138,6 +141,7 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
             phase_switching=bool(self.conf[CONF_PHASE_SWITCHING]),
             p_min_1p_w=float(self.conf[CONF_CHARGER_MIN_POWER_1P_W]),
             p_max_1p_w=float(self.conf[CONF_CHARGER_MAX_POWER_1P_W]),
+            solar_share=float(self.conf[CONF_SOLAR_SHARE_PCT]) / 100,
         )
         self.baseline = RollingAverage(
             timedelta(minutes=float(self.conf[CONF_BASELINE_WINDOW_MIN]))
@@ -145,6 +149,9 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
         # Set by the datetime/select entities (restored on startup).
         self.deadline: datetime | None = None
         self.deadline_scenario: str = SCENARIO_FULL
+        # Set by the quick trip number/switch entities (restored on startup).
+        self.quick_trip_km: float = 0.0
+        self.quick_trip_round_trip: bool = True
 
     @property
     def forecast_entities(self) -> list[str]:
@@ -274,7 +281,13 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
         )
 
         targets: dict[str, tuple[str, float]] = {
-            SCENARIO_FULL: (SCENARIO_FULL, limit if limit is not None else 100.0)
+            SCENARIO_FULL: (SCENARIO_FULL, limit if limit is not None else 100.0),
+            SCENARIO_QUICK_TRIP: (
+                SCENARIO_QUICK_TRIP,
+                trip_target_soc(
+                    self.quick_trip_km, self.quick_trip_round_trip, self.vehicle
+                ),
+            ),
         }
         for subentry_id, trip in self.trips.items():
             targets[subentry_id] = (
@@ -305,6 +318,7 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
                 charge_time_pv=None if pv_time is None else pv_time.duration,
                 charge_time_pv_extrapolated=pv_time is not None
                 and pv_time.extrapolated,
+                pv_grid_kwh=None if pv_time is None else pv_time.grid_kwh,
                 ready=soc >= target,
             )
 

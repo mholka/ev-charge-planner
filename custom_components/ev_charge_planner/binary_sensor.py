@@ -9,9 +9,9 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import SCENARIO_FULL
+from .const import MAIN_SCENARIOS
 from .coordinator import EvChargePlannerConfigEntry, EvChargePlannerCoordinator
-from .entity import EvChargePlannerEntity
+from .entity import EvChargePlannerEntity, scenario_key
 
 
 async def async_setup_entry(
@@ -22,7 +22,10 @@ async def async_setup_entry(
     """Set up binary sensors."""
     coordinator = entry.runtime_data
     async_add_entities(
-        [ReadySensor(coordinator, SCENARIO_FULL), DeadlineAtRiskSensor(coordinator)]
+        [
+            *(ReadySensor(coordinator, s) for s in MAIN_SCENARIOS),
+            DeadlineAtRiskSensor(coordinator),
+        ]
     )
     for subentry_id in coordinator.trips:
         async_add_entities(
@@ -33,12 +36,14 @@ async def async_setup_entry(
 class ReadySensor(EvChargePlannerEntity, BinarySensorEntity):
     """On when SoC has reached the scenario target."""
 
+    _platform_domain = "binary_sensor"
+
     def __init__(
         self, coordinator: EvChargePlannerCoordinator, scenario_id: str
     ) -> None:
         super().__init__(
             coordinator,
-            "full_ready" if scenario_id == SCENARIO_FULL else "ready",
+            scenario_key(scenario_id, "ready"),
             scenario_id,
         )
 
@@ -52,6 +57,7 @@ class DeadlineAtRiskSensor(EvChargePlannerEntity, BinarySensorEntity):
     """On when the deadline target cannot be met even with grid charging from now."""
 
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _platform_domain = "binary_sensor"
 
     def __init__(self, coordinator: EvChargePlannerCoordinator) -> None:
         super().__init__(coordinator, "deadline_at_risk")

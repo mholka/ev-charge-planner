@@ -257,3 +257,17 @@ def test_pv_eta_small_system_needs_phase_switching() -> None:
     eta = pv_eta(NOW, 10, s, 530, SWITCHING)
     assert eta is not None
     assert NOW + timedelta(hours=3) < eta < NOW + timedelta(hours=4)
+
+
+def test_solar_share() -> None:
+    half = ChargerParams(
+        p_min_w=4140, p_max_w=11000, phase_switching=True, solar_share=0.5
+    )
+    assert surplus_charge_power(600, half) == 0  # below 50 % of 1380 W
+    assert surplus_charge_power(700, half) == 1380  # grid tops up
+    assert surplus_charge_power(0, ChargerParams(4140, 11000, solar_share=0)) == 0
+    # 1 h at 700 W surplus -> 1.38 kWh, 0.68 kWh from grid
+    result = pv_charge_time(NOW, 1.38, slots(1200), 500, half)
+    assert result is not None
+    assert result.duration == timedelta(hours=1)
+    assert result.grid_kwh == pytest.approx(0.68)

@@ -20,6 +20,7 @@
           "phase_switching": "Automatic 1/3-phase switching",
           "charger_min_power_1p_w": "Single-phase minimum power",
           "charger_max_power_1p_w": "Single-phase maximum power",
+          "solar_share_pct": "Minimum solar share",
           "soc_reserve_pct": "Arrival reserve for trips",
           "baseline_mode": "House baseline mode",
           "baseline_window_min": "Rolling baseline window",
@@ -32,7 +33,8 @@
           "baseline_mode": "Household load subtracted from forecast PV: rolling average of the house consumption sensor, or a fixed value.",
           "baseline_fixed_w": "Used in fixed mode, and as fallback in rolling mode until house load data is available.",
           "forecast_extra_entities": "Optional later days (Solcast day 3–7 sensors) to extend the PV horizon beyond tomorrow.",
-          "phase_switching": "The wallbox drops to one phase when surplus is low. PV surplus then counts from the single-phase minimum (≈1.4 kW), up to the single-phase maximum (≈3.7 kW at 16 A)."
+          "phase_switching": "The wallbox drops to one phase when surplus is low. PV surplus then counts from the single-phase minimum (≈1.4 kW), up to the single-phase maximum (≈3.7 kW at 16 A).",
+          "solar_share_pct": "How much of the charger's minimum power must come from solar before solar charging starts. 100 % = pure solar. Lower values let the grid top up weak solar to the minimum power (the grid part is shown as grid_topup_kwh)."
         }
       }
     },
@@ -63,6 +65,7 @@
           "phase_switching": "Automatic 1/3-phase switching",
           "charger_min_power_1p_w": "Single-phase minimum power",
           "charger_max_power_1p_w": "Single-phase maximum power",
+          "solar_share_pct": "Minimum solar share",
           "soc_reserve_pct": "Arrival reserve for trips",
           "baseline_mode": "House baseline mode",
           "baseline_window_min": "Rolling baseline window",
@@ -75,7 +78,8 @@
           "baseline_mode": "Household load subtracted from forecast PV: rolling average of the house consumption sensor, or a fixed value.",
           "baseline_fixed_w": "Used in fixed mode, and as fallback in rolling mode until house load data is available.",
           "forecast_extra_entities": "Optional later days (Solcast day 3–7 sensors) to extend the PV horizon beyond tomorrow.",
-          "phase_switching": "The wallbox drops to one phase when surplus is low. PV surplus then counts from the single-phase minimum (≈1.4 kW), up to the single-phase maximum (≈3.7 kW at 16 A)."
+          "phase_switching": "The wallbox drops to one phase when surplus is low. PV surplus then counts from the single-phase minimum (≈1.4 kW), up to the single-phase maximum (≈3.7 kW at 16 A).",
+          "solar_share_pct": "How much of the charger's minimum power must come from solar before solar charging starts. 100 % = pure solar. Lower values let the grid top up weak solar to the minimum power (the grid part is shown as grid_topup_kwh)."
         }
       }
     },
@@ -127,67 +131,95 @@
   "entity": {
     "binary_sensor": {
       "full_ready": {
-        "name": "Full ready"
+        "name": "Full: charged"
+      },
+      "quick_trip_ready": {
+        "name": "Quick trip: charged"
       },
       "ready": {
-        "name": "Ready"
+        "name": "Charged for trip"
       },
       "deadline_at_risk": {
-        "name": "Deadline at risk"
+        "name": "Won't be ready by departure"
       }
     },
     "datetime": {
       "deadline": {
-        "name": "Deadline"
+        "name": "Departure time"
       }
     },
     "select": {
       "deadline_scenario": {
-        "name": "Deadline scenario"
+        "name": "Charge for"
       }
     },
     "sensor": {
       "full_energy_needed": {
-        "name": "Full energy needed"
+        "name": "Full: energy to charge"
       },
       "full_charge_time_grid": {
-        "name": "Full charge time grid"
+        "name": "Full: charging time on grid"
       },
       "full_charge_time_pv": {
-        "name": "Full charge time PV"
+        "name": "Full: charging time on solar"
       },
       "full_eta_grid": {
-        "name": "Full ETA grid"
+        "name": "Full: ready at (grid)"
       },
       "full_eta_pv": {
-        "name": "Full ETA PV"
+        "name": "Full: ready at (solar)"
+      },
+      "quick_trip_energy_needed": {
+        "name": "Quick trip: energy to charge"
+      },
+      "quick_trip_charge_time_grid": {
+        "name": "Quick trip: charging time on grid"
+      },
+      "quick_trip_charge_time_pv": {
+        "name": "Quick trip: charging time on solar"
+      },
+      "quick_trip_eta_grid": {
+        "name": "Quick trip: ready at (grid)"
+      },
+      "quick_trip_eta_pv": {
+        "name": "Quick trip: ready at (solar)"
       },
       "energy_needed": {
-        "name": "Energy needed"
+        "name": "Energy to charge"
       },
       "charge_time_grid": {
-        "name": "Charge time grid"
+        "name": "Charging time on grid"
       },
       "charge_time_pv": {
-        "name": "Charge time PV"
+        "name": "Charging time on solar"
       },
       "eta_grid": {
-        "name": "ETA grid"
+        "name": "Ready at (grid)"
       },
       "eta_pv": {
-        "name": "ETA PV"
+        "name": "Ready at (solar)"
       },
       "deadline_grid_topup": {
-        "name": "Deadline grid topup"
+        "name": "Grid energy needed before departure"
       },
       "latest_grid_start": {
-        "name": "Latest grid start"
+        "name": "Start grid charging by"
       },
       "pv_surplus_forecast": {
-        "name": "PV surplus forecast"
+        "name": "Solar energy available for the car"
       },
       "house_baseline": {
-        "name": "House baseline"
+        "name": "House consumption estimate"
+      }
+    },
+    "number": {
+      "quick_trip_distance": {
+        "name": "Quick trip: distance (one way)"
+      }
+    },
+    "switch": {
+      "quick_trip_round_trip": {
+        "name": "Quick trip: round trip"
       }
     }
   }

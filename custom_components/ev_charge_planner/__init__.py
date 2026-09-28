@@ -10,8 +10,10 @@ from .coordinator import EvChargePlannerConfigEntry, EvChargePlannerCoordinator
 PLATFORMS = [
     Platform.BINARY_SENSOR,
     Platform.DATETIME,
+    Platform.NUMBER,
     Platform.SELECT,
     Platform.SENSOR,
+    Platform.SWITCH,
 ]
 
 

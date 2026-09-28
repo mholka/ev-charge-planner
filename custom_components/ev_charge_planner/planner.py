@@ -39,6 +39,14 @@ class ChargerParams:
     phase_switching: bool = False
     p_min_1p_w: float = 1380.0
     p_max_1p_w: float = 3680.0
+    # Share of the minimum charging power that must come from PV (evcc "solar
+    # share"). Below 1.0 the grid tops up weak surplus to the minimum power.
+    solar_share: float = 1.0
+
+    @property
+    def lowest_power_w(self) -> float:
+        """Lowest power the wallbox can charge at."""
+        return self.p_min_1p_w if self.phase_switching else self.p_min_w
 
 
 @dataclass(frozen=True)
@@ -57,6 +65,7 @@ class PvRun:
     energy_kwh: float
     eta: datetime | None
     charging_hours: float
+    grid_kwh: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -65,6 +74,7 @@ class PvChargeTime:
 
     duration: timedelta
     extrapolated: bool
+    grid_kwh: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -103,6 +113,13 @@ def surplus_charge_power(surplus_w: float, charger: ChargerParams) -> float:
     if charger.phase_switching and surplus_w >= charger.p_min_1p_w:
         # One phase; between 1φ max and 3φ min it stays on 1φ at max power.
         return min(surplus_w, charger.p_max_1p_w)
+    if (
+        charger.solar_share < 1.0
+        and surplus_w > 0
+        and surplus_w >= charger.solar_share * charger.lowest_power_w
+    ):
+        # Grid tops up the missing part of the minimum power.
+        return charger.lowest_power_w
     return 0.0
 
 
@@ -142,6 +159,7 @@ def _simulate_pv(
     as zero PV.
     """
     energy = 0.0
+    grid = 0.0
     charging_hours = 0.0
     for slot in sorted(slots, key=lambda s: s.start):
         start = max(slot.start, now)
@@ -151,9 +169,11 @@ def _simulate_pv(
                 break
             continue
         pv = slot.pv_w * (factor if slot.start <= now < slot.end else 1.0)
-        power_kw = surplus_charge_power(pv - baseline_w, charger) / 1000
+        surplus_w = pv - baseline_w
+        power_kw = surplus_charge_power(surplus_w, charger) / 1000
         if power_kw <= 0:
             continue
+        grid_kw = max(0.0, power_kw - max(0.0, surplus_w) / 1000)
         hours = (end - start).total_seconds() / 3600
         if target_kwh is not None and energy + power_kw * hours >= target_kwh:
             needed_hours = (target_kwh - energy) / power_kw
@@ -161,10 +181,12 @@ def _simulate_pv(
                 target_kwh,
                 start + timedelta(hours=needed_hours),
                 charging_hours + needed_hours,
+                grid + grid_kw * needed_hours,
             )
         energy += power_kw * hours
+        grid += grid_kw * hours
         charging_hours += hours
-    return PvRun(energy, None, charging_hours)
+    return PvRun(energy, None, charging_hours, grid)
 
 
 def pv_eta(
@@ -201,12 +223,14 @@ def pv_charge_time(
         return PvChargeTime(timedelta(0), False)
     run = _simulate_pv(now, slots, baseline_w, charger, factor, target_kwh=energy_kwh)
     if run.eta is not None:
-        return PvChargeTime(timedelta(hours=run.charging_hours), False)
+        return PvChargeTime(timedelta(hours=run.charging_hours), False, run.grid_kwh)
     if run.charging_hours <= 0:
         return None
     avg_kw = run.energy_kwh / run.charging_hours
     hours = run.charging_hours + (energy_kwh - run.energy_kwh) / avg_kw
-    return PvChargeTime(timedelta(hours=hours), True)
+    # Assume the same grid top-up ratio for the extrapolated part.
+    grid = run.grid_kwh * energy_kwh / run.energy_kwh
+    return PvChargeTime(timedelta(hours=hours), True, grid)
 
 
 def pv_energy_until(

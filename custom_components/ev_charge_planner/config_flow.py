@@ -40,6 +40,7 @@ from .const import (
     CONF_ROUND_TRIP,
     CONF_SOC_ENTITY,
     CONF_SOC_RESERVE_PCT,
+    CONF_SOLAR_SHARE_PCT,
     CONF_TRIP_NAME,
     CONF_WALLBOX_POWER_ENTITY,
     DEFAULTS,
@@ -91,6 +92,7 @@ _PARAM_SELECTORS: dict[str, selector.Selector] = {
     CONF_PHASE_SWITCHING: selector.BooleanSelector(),
     CONF_CHARGER_MIN_POWER_1P_W: _number(0, 7400, 10, "W"),
     CONF_CHARGER_MAX_POWER_1P_W: _number(0, 7400, 10, "W"),
+    CONF_SOLAR_SHARE_PCT: _number(0, 100, 5, "%"),
     CONF_SOC_RESERVE_PCT: _number(0, 100, 1, "%"),
     CONF_BASELINE_MODE: selector.SelectSelector(
         selector.SelectSelectorConfig(
