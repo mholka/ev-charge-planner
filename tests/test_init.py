@@ -70,6 +70,7 @@ async def test_setup_and_unload(hass: HomeAssistant) -> None:
     assert hass.states.get("sensor.ev_office_energy_needed").state == "0.0"
     assert hass.states.get("select.ev_deadline_scenario").attributes["options"] == [
         "Full",
+        "Quick trip",
         "Office",
     ]
 
@@ -137,6 +138,56 @@ async def test_pv_eta_phase_switching(
     await _setup(hass, extra={"phase_switching": switching})
     state = hass.states.get("sensor.ev_full_eta_pv").state
     assert (state != "unknown") is has_eta
+
+
+async def test_quick_trip(hass: HomeAssistant) -> None:
+    set_sources(hass, soc=20, limit=80, pv_kw=3.5)
+    await _setup(hass, extra={"phase_switching": True})
+    # No distance yet: target = 10 % reserve < 20 % SoC
+    assert hass.states.get("binary_sensor.ev_quick_trip_ready").state == "on"
+
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {"entity_id": "number.ev_quick_trip_distance", "value": 75},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    # 150 km / 5 / 75 kWh = 40 % + 10 % = 50 % -> 30 % of 75 kWh / 0.9 = 25 kWh
+    energy = hass.states.get("sensor.ev_quick_trip_energy_needed")
+    assert float(energy.state) == pytest.approx(25.0)
+    assert energy.attributes["target_soc"] == 50.0
+    assert hass.states.get("binary_sensor.ev_quick_trip_ready").state == "off"
+    grid = float(hass.states.get("sensor.ev_quick_trip_charge_time_grid").state)
+    assert grid == pytest.approx(25 / 11 * 60, abs=0.2)
+    # 3.5 kW PV - 500 W = 3 kW on one phase -> 25 / 3 h
+    solar = hass.states.get("sensor.ev_quick_trip_charge_time_pv")
+    assert float(solar.state) == pytest.approx(25 / 3 * 60, abs=1)
+    assert solar.attributes["grid_topup_kwh"] == 0
+
+    await hass.services.async_call(
+        "switch",
+        "turn_off",
+        {"entity_id": "switch.ev_quick_trip_round_trip"},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    assert (
+        hass.states.get("sensor.ev_quick_trip_energy_needed").attributes["target_soc"]
+        == 30.0
+    )
+
+
+async def test_solar_share_tops_up_from_grid(hass: HomeAssistant) -> None:
+    # 1.2 kW PV - 500 W = 700 W surplus: half of the 1.38 kW 1φ minimum
+    set_sources(hass, soc=70, limit=80, pv_kw=1.2)
+    await _setup(hass, extra={"phase_switching": True, "solar_share_pct": 50})
+    solar = hass.states.get("sensor.ev_full_charge_time_pv")
+    # 8.33 kWh at 1.38 kW, of which 0.68 kW from grid
+    assert float(solar.state) == pytest.approx(75 / 9 / 1.38 * 60, abs=1)
+    assert solar.attributes["grid_topup_kwh"] == pytest.approx(
+        75 / 9 * 0.68 / 1.38, abs=0.05
+    )
 
 
 async def test_deadline(hass: HomeAssistant) -> None:

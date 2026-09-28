@@ -17,14 +17,14 @@ from homeassistant.const import EntityCategory, UnitOfEnergy, UnitOfPower, UnitO
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import SCENARIO_FULL
+from .const import MAIN_SCENARIOS
 from .coordinator import (
     EvChargePlannerConfigEntry,
     EvChargePlannerCoordinator,
     PlannerData,
     ScenarioResult,
 )
-from .entity import EvChargePlannerEntity
+from .entity import EvChargePlannerEntity, scenario_key
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -71,6 +71,9 @@ SCENARIO_SENSORS = (
         attrs_fn=lambda s: {
             "done_at": s.eta_pv,
             "extrapolated": s.charge_time_pv_extrapolated,
+            "grid_topup_kwh": None
+            if s.pv_grid_kwh is None
+            else round(s.pv_grid_kwh, 2),
         },
     ),
     ScenarioSensorDescription(
@@ -138,7 +141,8 @@ async def async_setup_entry(
     async_add_entities(
         [
             *(
-                ScenarioSensor(coordinator, desc, SCENARIO_FULL)
+                ScenarioSensor(coordinator, desc, scenario_id)
+                for scenario_id in MAIN_SCENARIOS
                 for desc in SCENARIO_SENSORS
             ),
             *(PlannerSensor(coordinator, desc) for desc in PLANNER_SENSORS),
@@ -157,6 +161,8 @@ async def async_setup_entry(
 class ScenarioSensor(EvChargePlannerEntity, SensorEntity):
     """Energy needed / ETA for one scenario."""
 
+    _platform_domain = "sensor"
+
     entity_description: ScenarioSensorDescription
 
     def __init__(
@@ -168,7 +174,7 @@ class ScenarioSensor(EvChargePlannerEntity, SensorEntity):
         key = description.key
         super().__init__(
             coordinator,
-            f"full_{key}" if scenario_id == SCENARIO_FULL else key,
+            scenario_key(scenario_id, key),
             scenario_id,
         )
         self.entity_description = description
@@ -191,6 +197,8 @@ class ScenarioSensor(EvChargePlannerEntity, SensorEntity):
 
 class PlannerSensor(EvChargePlannerEntity, SensorEntity):
     """Deadline and diagnostic sensors."""
+
+    _platform_domain = "sensor"
 
     entity_description: PlannerSensorDescription
 

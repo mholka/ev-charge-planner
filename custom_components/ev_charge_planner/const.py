@@ -21,6 +21,7 @@ CONF_CHARGER_MIN_POWER_W = "charger_min_power_w"
 CONF_CHARGER_MAX_POWER_W = "charger_max_power_w"
 CONF_SOC_RESERVE_PCT = "soc_reserve_pct"
 CONF_PHASE_SWITCHING = "phase_switching"
+CONF_SOLAR_SHARE_PCT = "solar_share_pct"
 CONF_CHARGER_MIN_POWER_1P_W = "charger_min_power_1p_w"
 CONF_CHARGER_MAX_POWER_1P_W = "charger_max_power_1p_w"
 
@@ -36,6 +37,9 @@ CONF_DISTANCE_KM = "distance_km"
 CONF_ROUND_TRIP = "round_trip"
 
 SCENARIO_FULL = "full"
+SCENARIO_QUICK_TRIP = "quick_trip"
+# Scenarios whose entities live on the main "EV" device.
+MAIN_SCENARIOS = (SCENARIO_FULL, SCENARIO_QUICK_TRIP)
 
 DEFAULTS = {
     CONF_BATTERY_CAPACITY_KWH: 75.0,
@@ -45,6 +49,7 @@ DEFAULTS = {
     CONF_CHARGER_MAX_POWER_W: 11000.0,
     CONF_SOC_RESERVE_PCT: 10.0,
     CONF_PHASE_SWITCHING: False,
+    CONF_SOLAR_SHARE_PCT: 100.0,
     CONF_CHARGER_MIN_POWER_1P_W: 1380.0,
     CONF_CHARGER_MAX_POWER_1P_W: 3680.0,
     CONF_BASELINE_MODE: BASELINE_ROLLING,

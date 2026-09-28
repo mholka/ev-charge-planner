@@ -26,6 +26,8 @@ async def async_setup_entry(
 class DeadlineEntity(EvChargePlannerEntity, DateTimeEntity, RestoreEntity):
     """When the deadline scenario's target must be reached."""
 
+    _platform_domain = "datetime"
+
     def __init__(self, coordinator: EvChargePlannerCoordinator) -> None:
         super().__init__(coordinator, "deadline")
 
