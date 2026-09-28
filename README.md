@@ -80,6 +80,8 @@ The calculation lives in `planner.py` without Home Assistant imports.
 
 ## Development
 
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the fork workflow, branch names and guidelines.
+
 ```bash
 python3.13 -m venv .venv
 .venv/bin/pip install -r requirements_test.txt
