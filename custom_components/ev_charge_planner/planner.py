@@ -28,10 +28,17 @@ class VehicleParams:
 
 @dataclass(frozen=True)
 class ChargerParams:
-    """Wallbox limits."""
+    """Wallbox limits.
+
+    p_min_w / p_max_w are the three-phase (or only) range. With phase switching
+    the wallbox also runs on one phase between p_min_1p_w and p_max_1p_w.
+    """
 
     p_min_w: float
     p_max_w: float
+    phase_switching: bool = False
+    p_min_1p_w: float = 1380.0
+    p_max_1p_w: float = 3680.0
 
 
 @dataclass(frozen=True)
@@ -91,9 +98,12 @@ def grid_eta(now: datetime, energy_kwh: float, charger: ChargerParams) -> dateti
 
 def surplus_charge_power(surplus_w: float, charger: ChargerParams) -> float:
     """Charging power the wallbox can run at for a given PV surplus."""
-    if surplus_w < charger.p_min_w:
-        return 0.0
-    return min(surplus_w, charger.p_max_w)
+    if surplus_w >= charger.p_min_w:
+        return min(surplus_w, charger.p_max_w)
+    if charger.phase_switching and surplus_w >= charger.p_min_1p_w:
+        # One phase; between 1φ max and 3φ min it stays on 1φ at max power.
+        return min(surplus_w, charger.p_max_1p_w)
+    return 0.0
 
 
 def forecast_power_at(slots: Sequence[Slot], when: datetime) -> float | None:

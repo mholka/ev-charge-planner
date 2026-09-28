@@ -25,7 +25,9 @@ from .const import (
     CONF_BATTERY_CAPACITY_KWH,
     CONF_CHARGE_EFFICIENCY,
     CONF_CHARGE_LIMIT_ENTITY,
+    CONF_CHARGER_MAX_POWER_1P_W,
     CONF_CHARGER_MAX_POWER_W,
+    CONF_CHARGER_MIN_POWER_1P_W,
     CONF_CHARGER_MIN_POWER_W,
     CONF_CONSUMPTION_KM_PER_KWH,
     CONF_DISTANCE_KM,
@@ -33,6 +35,7 @@ from .const import (
     CONF_FORECAST_EXTRA_ENTITIES,
     CONF_FORECAST_TOMORROW_ENTITY,
     CONF_HOUSE_LOAD_ENTITY,
+    CONF_PHASE_SWITCHING,
     CONF_PV_POWER_ENTITY,
     CONF_ROUND_TRIP,
     CONF_SOC_ENTITY,
@@ -85,6 +88,9 @@ _PARAM_SELECTORS: dict[str, selector.Selector] = {
     CONF_CHARGE_EFFICIENCY: _number(0.5, 1, 0.01),
     CONF_CHARGER_MIN_POWER_W: _number(0, 22000, 10, "W"),
     CONF_CHARGER_MAX_POWER_W: _number(1000, 22000, 10, "W"),
+    CONF_PHASE_SWITCHING: selector.BooleanSelector(),
+    CONF_CHARGER_MIN_POWER_1P_W: _number(0, 7400, 10, "W"),
+    CONF_CHARGER_MAX_POWER_1P_W: _number(0, 7400, 10, "W"),
     CONF_SOC_RESERVE_PCT: _number(0, 100, 1, "%"),
     CONF_BASELINE_MODE: selector.SelectSelector(
         selector.SelectSelectorConfig(
@@ -123,6 +129,12 @@ def _validate(user_input: dict[str, Any]) -> dict[str, str]:
     errors: dict[str, str] = {}
     if user_input[CONF_CHARGER_MIN_POWER_W] > user_input[CONF_CHARGER_MAX_POWER_W]:
         errors[CONF_CHARGER_MIN_POWER_W] = "min_above_max"
+    if (
+        user_input[CONF_PHASE_SWITCHING]
+        and user_input[CONF_CHARGER_MIN_POWER_1P_W]
+        > user_input[CONF_CHARGER_MAX_POWER_1P_W]
+    ):
+        errors[CONF_CHARGER_MIN_POWER_1P_W] = "min_above_max"
     return errors
 
 
