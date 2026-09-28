@@ -44,6 +44,23 @@ class Slot:
 
 
 @dataclass(frozen=True)
+class PvRun:
+    """Result of simulating PV surplus charging."""
+
+    energy_kwh: float
+    eta: datetime | None
+    charging_hours: float
+
+
+@dataclass(frozen=True)
+class PvChargeTime:
+    """How long the charger has to run on PV surplus to deliver the energy."""
+
+    duration: timedelta
+    extrapolated: bool
+
+
+@dataclass(frozen=True)
 class DeadlineResult:
     """Answer to "need the energy by the deadline"."""
 
@@ -106,14 +123,16 @@ def _simulate_pv(
     factor: float,
     until: datetime | None = None,
     target_kwh: float | None = None,
-) -> tuple[float, datetime | None]:
+) -> PvRun:
     """Charge from PV surplus from now on.
 
-    Stops at `until` or when `target_kwh` is reached. Returns the energy charged
-    and the time the target was reached (None if not reached). Gaps between
-    slots and time past the last slot count as zero PV.
+    Stops at `until` or when `target_kwh` is reached. Returns the energy charged,
+    the time the target was reached (None if not reached) and the hours the
+    charger actually ran. Gaps between slots and time past the last slot count
+    as zero PV.
     """
     energy = 0.0
+    charging_hours = 0.0
     for slot in sorted(slots, key=lambda s: s.start):
         start = max(slot.start, now)
         end = slot.end if until is None else min(slot.end, until)
@@ -127,9 +146,15 @@ def _simulate_pv(
             continue
         hours = (end - start).total_seconds() / 3600
         if target_kwh is not None and energy + power_kw * hours >= target_kwh:
-            return target_kwh, start + timedelta(hours=(target_kwh - energy) / power_kw)
+            needed_hours = (target_kwh - energy) / power_kw
+            return PvRun(
+                target_kwh,
+                start + timedelta(hours=needed_hours),
+                charging_hours + needed_hours,
+            )
         energy += power_kw * hours
-    return energy, None
+        charging_hours += hours
+    return PvRun(energy, None, charging_hours)
 
 
 def pv_eta(
@@ -143,9 +168,35 @@ def pv_eta(
     """ETA charging from PV surplus only; None if not reached within the forecast."""
     if energy_kwh <= 0:
         return now
-    return _simulate_pv(now, slots, baseline_w, charger, factor, target_kwh=energy_kwh)[
-        1
-    ]
+    return _simulate_pv(
+        now, slots, baseline_w, charger, factor, target_kwh=energy_kwh
+    ).eta
+
+
+def pv_charge_time(
+    now: datetime,
+    energy_kwh: float,
+    slots: Sequence[Slot],
+    baseline_w: float,
+    charger: ChargerParams,
+    factor: float = 1.0,
+) -> PvChargeTime | None:
+    """Time the charger runs on PV surplus to deliver `energy_kwh` (nights excluded).
+
+    If the forecast horizon is too short, the rest is extrapolated at the average
+    PV charging power seen in the forecast. None if the forecast has no usable
+    surplus at all.
+    """
+    if energy_kwh <= 0:
+        return PvChargeTime(timedelta(0), False)
+    run = _simulate_pv(now, slots, baseline_w, charger, factor, target_kwh=energy_kwh)
+    if run.eta is not None:
+        return PvChargeTime(timedelta(hours=run.charging_hours), False)
+    if run.charging_hours <= 0:
+        return None
+    avg_kw = run.energy_kwh / run.charging_hours
+    hours = run.charging_hours + (energy_kwh - run.energy_kwh) / avg_kw
+    return PvChargeTime(timedelta(hours=hours), True)
 
 
 def pv_energy_until(
@@ -159,7 +210,7 @@ def pv_energy_until(
     """Energy (kWh) PV surplus charging delivers between now and `until`."""
     if until <= now:
         return 0.0
-    return _simulate_pv(now, slots, baseline_w, charger, factor, until=until)[0]
+    return _simulate_pv(now, slots, baseline_w, charger, factor, until=until).energy_kwh
 
 
 def deadline_plan(

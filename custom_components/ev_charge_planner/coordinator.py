@@ -28,6 +28,7 @@ from .const import (
     CONF_CONSUMPTION_KM_PER_KWH,
     CONF_DISTANCE_KM,
     CONF_FORECAST_ENTITY,
+    CONF_FORECAST_EXTRA_ENTITIES,
     CONF_FORECAST_TOMORROW_ENTITY,
     CONF_HOUSE_LOAD_ENTITY,
     CONF_PV_POWER_ENTITY,
@@ -45,12 +46,15 @@ from .forecast import merge_slots, parse_solcast
 from .planner import (
     ChargerParams,
     DeadlineResult,
+    Slot,
     VehicleParams,
     deadline_plan,
     energy_needed_kwh,
     forecast_power_at,
     grid_eta,
     nowcast_factor,
+    pv_charge_time,
+    pv_energy_until,
     pv_eta,
     trip_target_soc,
 )
@@ -70,7 +74,21 @@ class ScenarioResult:
     energy_needed_kwh: float
     eta_grid: datetime
     eta_pv: datetime | None
+    charge_time_grid: timedelta
+    charge_time_pv: timedelta | None
+    charge_time_pv_extrapolated: bool
     ready: bool
+
+
+@dataclass
+class ForecastSummary:
+    """What the planner saw of the PV forecast (diagnostics)."""
+
+    surplus_kwh: float
+    slots: int
+    horizon_end: datetime | None
+    peak_w: float
+    entities_without_data: list[str]
 
 
 @dataclass
@@ -81,6 +99,7 @@ class PlannerData:
     baseline_w: float
     nowcast_factor: float
     charging_power_w: float | None
+    forecast: ForecastSummary
     scenarios: dict[str, ScenarioResult] = field(default_factory=dict)
     deadline: DeadlineResult | None = None
 
@@ -122,6 +141,16 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
         self.deadline_scenario: str = SCENARIO_FULL
 
     @property
+    def forecast_entities(self) -> list[str]:
+        """Configured forecast entities in horizon order."""
+        entities = [
+            self.conf.get(CONF_FORECAST_ENTITY),
+            self.conf.get(CONF_FORECAST_TOMORROW_ENTITY),
+            *(self.conf.get(CONF_FORECAST_EXTRA_ENTITIES) or []),
+        ]
+        return [e for e in entities if e]
+
+    @property
     def trips(self) -> dict[str, dict[str, Any]]:
         """Trip subentries keyed by subentry id."""
         return {
@@ -143,13 +172,9 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
             )
 
         triggers = [
-            self.conf.get(key)
-            for key in (
-                CONF_SOC_ENTITY,
-                CONF_CHARGE_LIMIT_ENTITY,
-                CONF_FORECAST_ENTITY,
-                CONF_FORECAST_TOMORROW_ENTITY,
-            )
+            self.conf.get(CONF_SOC_ENTITY),
+            self.conf.get(CONF_CHARGE_LIMIT_ENTITY),
+            *self.forecast_entities,
         ]
         self.config_entry.async_on_unload(
             async_track_state_change_event(
@@ -194,13 +219,17 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
             return float(self.conf[CONF_BASELINE_FIXED_W])
         return mean
 
-    def _forecast_slots(self) -> list:
+    def _forecast_slots(self) -> tuple[list[Slot], list[str]]:
+        """Merged slots and the forecast entities that provided none."""
         slot_lists = []
-        for key in (CONF_FORECAST_ENTITY, CONF_FORECAST_TOMORROW_ENTITY):
-            entity_id = self.conf.get(key)
-            if entity_id and (state := self.hass.states.get(entity_id)):
-                slot_lists.append(parse_solcast(state.attributes))
-        return merge_slots(*slot_lists)
+        missing = []
+        for entity_id in self.forecast_entities:
+            state = self.hass.states.get(entity_id)
+            slots = parse_solcast(state.attributes) if state else []
+            if not slots:
+                missing.append(entity_id)
+            slot_lists.append(slots)
+        return merge_slots(*slot_lists), missing
 
     async def _async_update_data(self) -> PlannerData:
         now = dt_util.utcnow()
@@ -211,7 +240,7 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
             )
 
         limit = self._float_state(CONF_CHARGE_LIMIT_ENTITY)
-        slots = self._forecast_slots()
+        slots, missing = self._forecast_slots()
         baseline_w = self._baseline_w(now)
         factor = nowcast_factor(
             self._float_state(CONF_PV_POWER_ENTITY), forecast_power_at(slots, now)
@@ -222,6 +251,20 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
             baseline_w=baseline_w,
             nowcast_factor=factor,
             charging_power_w=self._float_state(CONF_WALLBOX_POWER_ENTITY),
+            forecast=ForecastSummary(
+                surplus_kwh=pv_energy_until(
+                    now,
+                    slots[-1].end if slots else now,
+                    slots,
+                    baseline_w,
+                    self.charger,
+                    factor,
+                ),
+                slots=len(slots),
+                horizon_end=slots[-1].end if slots else None,
+                peak_w=max((s.pv_w for s in slots if s.end > now), default=0.0),
+                entities_without_data=missing,
+            ),
         )
 
         targets: dict[str, tuple[str, float]] = {
@@ -240,13 +283,22 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
         for scenario_id, (name, raw_target) in targets.items():
             target = min(raw_target, 100.0)
             energy = energy_needed_kwh(soc, target, self.vehicle)
+            eta_grid = grid_eta(now, energy, self.charger)
+            eta_pv = pv_eta(now, energy, slots, baseline_w, self.charger, factor)
+            pv_time = pv_charge_time(
+                now, energy, slots, baseline_w, self.charger, factor
+            )
             data.scenarios[scenario_id] = ScenarioResult(
                 name=name,
                 target_soc=round(raw_target, 1),
                 reachable=raw_target <= 100.0,
                 energy_needed_kwh=energy,
-                eta_grid=grid_eta(now, energy, self.charger),
-                eta_pv=pv_eta(now, energy, slots, baseline_w, self.charger, factor),
+                eta_grid=eta_grid,
+                eta_pv=eta_pv,
+                charge_time_grid=eta_grid - now,
+                charge_time_pv=None if pv_time is None else pv_time.duration,
+                charge_time_pv_extrapolated=pv_time is not None
+                and pv_time.extrapolated,
                 ready=soc >= target,
             )
 

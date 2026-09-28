@@ -24,6 +24,7 @@ Settings → Devices & services → Add integration → **EV Charge Planner**. E
 | House consumption | household load **excluding** the wallbox (W) |
 | Wallbox power | optional; shown as an attribute |
 | Solcast forecast today / tomorrow | Solcast sensors with the `detailedForecast` attribute |
+| Solcast forecast day 3+ | optional, several allowed (Solcast day 3–7 sensors); extends the PV horizon |
 | Battery capacity, consumption (km/kWh), efficiency | vehicle model; energy needed = ΔSoC × capacity / efficiency |
 | Charger min / max power | surplus below *min* is not used; charging never exceeds *max* |
 | Arrival reserve | SoC to keep on arrival for trip scenarios |
@@ -42,6 +43,8 @@ For the *full* scenario (device **EV**) and each trip (device **EV &lt;trip&gt;*
 | Entity | Meaning |
 |---|---|
 | `sensor.ev_<scenario>_energy_needed` | kWh the wallbox has to deliver (attributes: `target_soc`, `reachable`) |
+| `sensor.ev_<scenario>_charge_time_grid` | charging time at max charger power (duration, like Waze travel time) |
+| `sensor.ev_<scenario>_charge_time_pv` | time the charger has to run on PV surplus, nights excluded (attributes: `done_at`, `extrapolated`); `unknown` if the forecast has no usable surplus |
 | `sensor.ev_<scenario>_eta_grid` | done at max charger power |
 | `sensor.ev_<scenario>_eta_pv` | done on PV surplus only; `unknown` if not reached within the forecast |
 | `binary_sensor.ev_<scenario>_ready` | SoC ≥ target |
@@ -56,12 +59,15 @@ Deadline planning:
 | `sensor.ev_latest_grid_start` | latest time to switch to full-power charging; `unknown` if PV suffices |
 | `binary_sensor.ev_deadline_at_risk` | the target cannot be met even with grid charging from now |
 
-Diagnostic: `sensor.ev_house_baseline` (W; attributes `nowcast_factor`, `charging_power_w`).
+Diagnostics:
+- `sensor.ev_house_baseline` (W; attributes `nowcast_factor`, `charging_power_w`)
+- `sensor.ev_pv_surplus_forecast`: kWh the charger could take from PV surplus within the forecast (attributes `forecast_slots`, `horizon_end`, `peak_forecast_w`, `entities_without_data`). If PV ETAs stay `unknown`, check this first.
 
 ## How it works
 
 - **PV ETA**: walks forecast slots from now; surplus = forecast PV − house baseline (current slot scaled by actual/forecast PV, clamped 0.3–2). The charger runs at `min(surplus, max)` when surplus ≥ min, otherwise not at all. Forecast gaps count as no PV.
 - **Deadline**: charge on PV surplus, then switch to full power at the latest moment *s* where `PV(now → s) + P_max × (deadline − s) ≥ energy needed`.
+- **PV charge time**: the charging hours from the same walk. If the target is beyond the forecast horizon, the remainder is extrapolated at the average PV charging power (`extrapolated: true`).
 - Updates every 5 minutes and immediately when SoC, charge limit, forecast, deadline or deadline scenario change.
 
 The calculation lives in `planner.py` without Home Assistant imports.

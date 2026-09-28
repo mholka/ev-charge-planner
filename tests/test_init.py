@@ -19,11 +19,13 @@ from .common import CONFIG, ENTITIES, set_sources
 
 
 async def _setup(
-    hass: HomeAssistant, trips: dict[str, float] | None = None
+    hass: HomeAssistant,
+    trips: dict[str, float] | None = None,
+    extra: dict | None = None,
 ) -> MockConfigEntry:
     entry = MockConfigEntry(
         domain=DOMAIN,
-        data=CONFIG,
+        data={**CONFIG, **(extra or {})},
         subentries_data=[
             ConfigSubentryData(
                 data={CONF_DISTANCE_KM: km, CONF_ROUND_TRIP: True},
@@ -54,6 +56,14 @@ async def test_setup_and_unload(hass: HomeAssistant) -> None:
         minutes=1
     )
     assert hass.states.get("sensor.ev_full_eta_pv").state == "unknown"  # no PV
+    assert hass.states.get("sensor.ev_full_charge_time_pv").state == "unknown"
+    grid_time = hass.states.get("sensor.ev_full_charge_time_grid")
+    assert float(grid_time.state) == pytest.approx(25 / 11 * 60, abs=0.2)
+    assert grid_time.attributes["unit_of_measurement"] == "min"
+    forecast = hass.states.get("sensor.ev_pv_surplus_forecast")
+    assert forecast.state == "0.0"
+    assert forecast.attributes["forecast_slots"] == 48
+    assert forecast.attributes["entities_without_data"] == []
     assert hass.states.get("binary_sensor.ev_full_ready").state == "off"
     # Office: 40 km / 5 / 75 = 10.7 % + 10 % reserve < 50 % SoC
     assert hass.states.get("binary_sensor.ev_office_ready").state == "on"
@@ -91,6 +101,31 @@ async def test_pv_eta_with_surplus(hass: HomeAssistant) -> None:
     assert abs(eta - dt_util.utcnow() - (timedelta(hours=25 / 7.5))) <= timedelta(
         minutes=2
     )
+
+
+async def test_pv_charge_time_extrapolated_and_extra_days(hass: HomeAssistant) -> None:
+    set_sources(hass, soc=10, limit=100, pv_kw=5.5)
+    # Forecast covers 24 h from the top of the hour; 5 kW surplus -> 120 kWh
+    # would be enough, so limit the horizon to 2 slots to force extrapolation.
+    start = dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
+    forecast = [
+        {"period_start": start + timedelta(minutes=30 * i), "pv_estimate": 5.5}
+        for i in range(4)
+    ]
+    hass.states.async_set(
+        ENTITIES["forecast_entity"], "1", {"detailedForecast": forecast}
+    )
+    hass.states.async_set("sensor.solcast_day_3", "1", {})
+    await _setup(hass, extra={"forecast_extra_entities": ["sensor.solcast_day_3"]})
+
+    # 90 % of 75 kWh / 0.9 = 75 kWh at 5 kW = 15 h of PV charging
+    state = hass.states.get("sensor.ev_full_charge_time_pv")
+    assert float(state.state) == pytest.approx(15 * 60, abs=1)
+    assert state.attributes["extrapolated"] is True
+    assert state.attributes["done_at"] is None
+    assert hass.states.get("sensor.ev_pv_surplus_forecast").attributes[
+        "entities_without_data"
+    ] == ["sensor.solcast_day_3"]
 
 
 async def test_deadline(hass: HomeAssistant) -> None:
