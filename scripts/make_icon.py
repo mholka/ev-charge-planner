@@ -1,6 +1,6 @@
-"""Render the integration icon (battery + bolt + sun) for home-assistant/brands.
+"""Render the integration icon (battery + bolt + sun) into the brand folder.
 
-Usage: python scripts/make_icon.py  ->  brand/icon.png (256px), brand/icon@2x.png (512px)
+Usage: python scripts/make_icon.py  ->  custom_components/ev_charge_planner/brand/icon.png (256px) and icon@2x.png (512px)
 """
 
 import math
@@ -69,7 +69,12 @@ def trim_square(img: Image.Image) -> Image.Image:
 
 
 def main() -> None:
-    out_dir = Path(__file__).resolve().parent.parent / "brand"
+    out_dir = (
+        Path(__file__).resolve().parent.parent
+        / "custom_components"
+        / "ev_charge_planner"
+        / "brand"
+    )
     out_dir.mkdir(exist_ok=True)
     icon = trim_square(draw())
     for name, size in (("icon.png", 256), ("icon@2x.png", 512)):
