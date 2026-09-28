@@ -1,0 +1,161 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "EV Charge Planner",
+        "description": "Pick the source entities and vehicle/charger parameters.",
+        "data": {
+          "soc_entity": "Battery level (SoC %)",
+          "charge_limit_entity": "Charge limit (%)",
+          "pv_power_entity": "PV power (W)",
+          "house_load_entity": "House consumption excl. wallbox (W)",
+          "wallbox_power_entity": "Wallbox power (W)",
+          "forecast_entity": "Solcast forecast today",
+          "forecast_tomorrow_entity": "Solcast forecast tomorrow",
+          "battery_capacity_kwh": "Usable battery capacity",
+          "consumption_km_per_kwh": "Consumption",
+          "charge_efficiency": "Charging efficiency (AC → battery)",
+          "charger_min_power_w": "Charger minimum power",
+          "charger_max_power_w": "Charger maximum power",
+          "soc_reserve_pct": "Arrival reserve for trips",
+          "baseline_mode": "House baseline mode",
+          "baseline_window_min": "Rolling baseline window",
+          "baseline_fixed_w": "Fixed baseline"
+        },
+        "data_description": {
+          "charge_limit_entity": "Target for the \"full\" scenario. Without it, 100 % is used.",
+          "charger_min_power_w": "Lowest power the wallbox can charge at (≈1.4 kW single-phase, ≈4.1 kW three-phase). Surplus below this is not used.",
+          "baseline_mode": "Household load subtracted from forecast PV: rolling average of the house consumption sensor, or a fixed value.",
+          "baseline_fixed_w": "Used in fixed mode, and as fallback in rolling mode until house load data is available."
+        }
+      }
+    },
+    "error": {
+      "min_above_max": "Minimum power must not exceed maximum power."
+    },
+    "abort": {
+      "single_instance_allowed": "Already configured. Only a single configuration is possible."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "EV Charge Planner options",
+        "data": {
+          "soc_entity": "Battery level (SoC %)",
+          "charge_limit_entity": "Charge limit (%)",
+          "pv_power_entity": "PV power (W)",
+          "house_load_entity": "House consumption excl. wallbox (W)",
+          "wallbox_power_entity": "Wallbox power (W)",
+          "forecast_entity": "Solcast forecast today",
+          "forecast_tomorrow_entity": "Solcast forecast tomorrow",
+          "battery_capacity_kwh": "Usable battery capacity",
+          "consumption_km_per_kwh": "Consumption",
+          "charge_efficiency": "Charging efficiency (AC → battery)",
+          "charger_min_power_w": "Charger minimum power",
+          "charger_max_power_w": "Charger maximum power",
+          "soc_reserve_pct": "Arrival reserve for trips",
+          "baseline_mode": "House baseline mode",
+          "baseline_window_min": "Rolling baseline window",
+          "baseline_fixed_w": "Fixed baseline"
+        }
+      }
+    },
+    "error": {
+      "min_above_max": "Minimum power must not exceed maximum power."
+    }
+  },
+  "config_subentries": {
+    "trip": {
+      "initiate_flow": {
+        "user": "Add trip"
+      },
+      "entry_type": "Trip",
+      "step": {
+        "user": {
+          "title": "Add trip",
+          "data": {
+            "name": "Name",
+            "distance_km": "Distance (one way)",
+            "round_trip": "Round trip"
+          }
+        },
+        "reconfigure": {
+          "title": "Edit trip",
+          "data": {
+            "name": "Name",
+            "distance_km": "Distance (one way)",
+            "round_trip": "Round trip"
+          }
+        }
+      },
+      "error": {
+        "name_required": "Name is required.",
+        "name_exists": "A trip with this name already exists."
+      },
+      "abort": {
+        "reconfigure_successful": "Trip updated."
+      }
+    }
+  },
+  "selector": {
+    "baseline_mode": {
+      "options": {
+        "rolling": "Rolling average",
+        "fixed": "Fixed value"
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "full_ready": {
+        "name": "Full ready"
+      },
+      "ready": {
+        "name": "Ready"
+      },
+      "deadline_at_risk": {
+        "name": "Deadline at risk"
+      }
+    },
+    "datetime": {
+      "deadline": {
+        "name": "Deadline"
+      }
+    },
+    "select": {
+      "deadline_scenario": {
+        "name": "Deadline scenario"
+      }
+    },
+    "sensor": {
+      "full_energy_needed": {
+        "name": "Full energy needed"
+      },
+      "full_eta_grid": {
+        "name": "Full ETA grid"
+      },
+      "full_eta_pv": {
+        "name": "Full ETA PV"
+      },
+      "energy_needed": {
+        "name": "Energy needed"
+      },
+      "eta_grid": {
+        "name": "ETA grid"
+      },
+      "eta_pv": {
+        "name": "ETA PV"
+      },
+      "deadline_grid_topup": {
+        "name": "Deadline grid topup"
+      },
+      "latest_grid_start": {
+        "name": "Latest grid start"
+      },
+      "house_baseline": {
+        "name": "House baseline"
+      }
+    }
+  }
+}

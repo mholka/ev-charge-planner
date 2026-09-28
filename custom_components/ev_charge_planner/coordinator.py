@@ -1,0 +1,264 @@
+"""Data update coordinator for EV Charge Planner."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+import logging
+from typing import Any
+
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
+
+from .baseline import RollingAverage
+from .const import (
+    BASELINE_FIXED,
+    CONF_BASELINE_FIXED_W,
+    CONF_BASELINE_MODE,
+    CONF_BASELINE_WINDOW_MIN,
+    CONF_BATTERY_CAPACITY_KWH,
+    CONF_CHARGE_EFFICIENCY,
+    CONF_CHARGE_LIMIT_ENTITY,
+    CONF_CHARGER_MAX_POWER_W,
+    CONF_CHARGER_MIN_POWER_W,
+    CONF_CONSUMPTION_KM_PER_KWH,
+    CONF_DISTANCE_KM,
+    CONF_FORECAST_ENTITY,
+    CONF_FORECAST_TOMORROW_ENTITY,
+    CONF_HOUSE_LOAD_ENTITY,
+    CONF_PV_POWER_ENTITY,
+    CONF_ROUND_TRIP,
+    CONF_SOC_ENTITY,
+    CONF_SOC_RESERVE_PCT,
+    CONF_WALLBOX_POWER_ENTITY,
+    DEFAULTS,
+    DOMAIN,
+    SCENARIO_FULL,
+    SUBENTRY_TRIP,
+    UPDATE_INTERVAL,
+)
+from .forecast import merge_slots, parse_solcast
+from .planner import (
+    ChargerParams,
+    DeadlineResult,
+    VehicleParams,
+    deadline_plan,
+    energy_needed_kwh,
+    forecast_power_at,
+    grid_eta,
+    nowcast_factor,
+    pv_eta,
+    trip_target_soc,
+)
+
+_LOGGER = logging.getLogger(__name__)
+
+type EvChargePlannerConfigEntry = ConfigEntry[EvChargePlannerCoordinator]
+
+
+@dataclass
+class ScenarioResult:
+    """Planner output for one target."""
+
+    name: str
+    target_soc: float
+    reachable: bool
+    energy_needed_kwh: float
+    eta_grid: datetime
+    eta_pv: datetime | None
+    ready: bool
+
+
+@dataclass
+class PlannerData:
+    """Everything the entities render."""
+
+    soc: float
+    baseline_w: float
+    nowcast_factor: float
+    charging_power_w: float | None
+    scenarios: dict[str, ScenarioResult] = field(default_factory=dict)
+    deadline: DeadlineResult | None = None
+
+
+def entry_config(entry: ConfigEntry) -> dict[str, Any]:
+    """Merged config: defaults < data < options."""
+    return {**DEFAULTS, **entry.data, **entry.options}
+
+
+class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
+    """Reads source entities and runs the planner."""
+
+    config_entry: EvChargePlannerConfigEntry
+
+    def __init__(self, hass: HomeAssistant, entry: EvChargePlannerConfigEntry) -> None:
+        super().__init__(
+            hass,
+            _LOGGER,
+            config_entry=entry,
+            name=DOMAIN,
+            update_interval=UPDATE_INTERVAL,
+        )
+        self.conf = entry_config(entry)
+        self.vehicle = VehicleParams(
+            capacity_kwh=float(self.conf[CONF_BATTERY_CAPACITY_KWH]),
+            km_per_kwh=float(self.conf[CONF_CONSUMPTION_KM_PER_KWH]),
+            efficiency=float(self.conf[CONF_CHARGE_EFFICIENCY]),
+            reserve_pct=float(self.conf[CONF_SOC_RESERVE_PCT]),
+        )
+        self.charger = ChargerParams(
+            p_min_w=float(self.conf[CONF_CHARGER_MIN_POWER_W]),
+            p_max_w=float(self.conf[CONF_CHARGER_MAX_POWER_W]),
+        )
+        self.baseline = RollingAverage(
+            timedelta(minutes=float(self.conf[CONF_BASELINE_WINDOW_MIN]))
+        )
+        # Set by the datetime/select entities (restored on startup).
+        self.deadline: datetime | None = None
+        self.deadline_scenario: str = SCENARIO_FULL
+
+    @property
+    def trips(self) -> dict[str, dict[str, Any]]:
+        """Trip subentries keyed by subentry id."""
+        return {
+            subentry_id: {"title": subentry.title, **subentry.data}
+            for subentry_id, subentry in self.config_entry.subentries.items()
+            if subentry.subentry_type == SUBENTRY_TRIP
+        }
+
+    @callback
+    def async_setup_listeners(self) -> None:
+        """Refresh on source changes and track house load for the baseline."""
+        house = self.conf.get(CONF_HOUSE_LOAD_ENTITY)
+        if house:
+            self._record_house_load(self.hass.states.get(house))
+            self.config_entry.async_on_unload(
+                async_track_state_change_event(
+                    self.hass, [house], self._handle_house_load_event
+                )
+            )
+
+        triggers = [
+            self.conf.get(key)
+            for key in (
+                CONF_SOC_ENTITY,
+                CONF_CHARGE_LIMIT_ENTITY,
+                CONF_FORECAST_ENTITY,
+                CONF_FORECAST_TOMORROW_ENTITY,
+            )
+        ]
+        self.config_entry.async_on_unload(
+            async_track_state_change_event(
+                self.hass, [e for e in triggers if e], self._handle_trigger_event
+            )
+        )
+
+    @callback
+    def _handle_house_load_event(self, event: Event[EventStateChangedData]) -> None:
+        self._record_house_load(event.data["new_state"])
+
+    def _record_house_load(self, state: Any) -> None:
+        if state is None:
+            return
+        try:
+            value = float(state.state)
+        except ValueError:
+            return
+        self.baseline.add(state.last_changed, value)
+
+    @callback
+    def _handle_trigger_event(self, event: Event[EventStateChangedData]) -> None:
+        self.hass.async_create_task(self.async_request_refresh())
+
+    def _float_state(self, key: str) -> float | None:
+        entity_id = self.conf.get(key)
+        if not entity_id:
+            return None
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            return None
+        try:
+            return float(state.state)
+        except ValueError:
+            return None
+
+    def _baseline_w(self, now: datetime) -> float:
+        if self.conf[CONF_BASELINE_MODE] == BASELINE_FIXED:
+            return float(self.conf[CONF_BASELINE_FIXED_W])
+        mean = self.baseline.mean(now)
+        if mean is None:
+            return float(self.conf[CONF_BASELINE_FIXED_W])
+        return mean
+
+    def _forecast_slots(self) -> list:
+        slot_lists = []
+        for key in (CONF_FORECAST_ENTITY, CONF_FORECAST_TOMORROW_ENTITY):
+            entity_id = self.conf.get(key)
+            if entity_id and (state := self.hass.states.get(entity_id)):
+                slot_lists.append(parse_solcast(state.attributes))
+        return merge_slots(*slot_lists)
+
+    async def _async_update_data(self) -> PlannerData:
+        now = dt_util.utcnow()
+        soc = self._float_state(CONF_SOC_ENTITY)
+        if soc is None:
+            raise UpdateFailed(
+                f"State of charge unavailable ({self.conf[CONF_SOC_ENTITY]})"
+            )
+
+        limit = self._float_state(CONF_CHARGE_LIMIT_ENTITY)
+        slots = self._forecast_slots()
+        baseline_w = self._baseline_w(now)
+        factor = nowcast_factor(
+            self._float_state(CONF_PV_POWER_ENTITY), forecast_power_at(slots, now)
+        )
+
+        data = PlannerData(
+            soc=soc,
+            baseline_w=baseline_w,
+            nowcast_factor=factor,
+            charging_power_w=self._float_state(CONF_WALLBOX_POWER_ENTITY),
+        )
+
+        targets: dict[str, tuple[str, float]] = {
+            SCENARIO_FULL: (SCENARIO_FULL, limit if limit is not None else 100.0)
+        }
+        for subentry_id, trip in self.trips.items():
+            targets[subentry_id] = (
+                trip["title"],
+                trip_target_soc(
+                    float(trip[CONF_DISTANCE_KM]),
+                    bool(trip.get(CONF_ROUND_TRIP, False)),
+                    self.vehicle,
+                ),
+            )
+
+        for scenario_id, (name, raw_target) in targets.items():
+            target = min(raw_target, 100.0)
+            energy = energy_needed_kwh(soc, target, self.vehicle)
+            data.scenarios[scenario_id] = ScenarioResult(
+                name=name,
+                target_soc=round(raw_target, 1),
+                reachable=raw_target <= 100.0,
+                energy_needed_kwh=energy,
+                eta_grid=grid_eta(now, energy, self.charger),
+                eta_pv=pv_eta(now, energy, slots, baseline_w, self.charger, factor),
+                ready=soc >= target,
+            )
+
+        scenario = data.scenarios.get(self.deadline_scenario)
+        if self.deadline is not None and scenario is not None:
+            data.deadline = deadline_plan(
+                now,
+                self.deadline,
+                scenario.energy_needed_kwh,
+                slots,
+                baseline_w,
+                self.charger,
+                factor,
+            )
+        return data
