@@ -25,6 +25,7 @@ from .coordinator import (
     ScenarioResult,
 )
 from .entity import EvChargePlannerEntity, scenario_key
+from .planner import PV_PHASES
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -39,7 +40,7 @@ class ScenarioSensorDescription(SensorEntityDescription):
 class PlannerSensorDescription(SensorEntityDescription):
     """Sensor on the main device."""
 
-    value_fn: Callable[[PlannerData], float | datetime | None]
+    value_fn: Callable[[PlannerData], float | str | datetime | None]
     attrs_fn: Callable[[PlannerData], dict[str, Any]] | None = None
 
 
@@ -100,6 +101,12 @@ PLANNER_SENSORS = (
         key="latest_grid_start",
         device_class=SensorDeviceClass.TIMESTAMP,
         value_fn=lambda d: d.deadline.latest_grid_start if d.deadline else None,
+    ),
+    PlannerSensorDescription(
+        key="pv_phase",
+        device_class=SensorDeviceClass.ENUM,
+        options=list(PV_PHASES),
+        value_fn=lambda d: d.pv_phase,
     ),
     PlannerSensorDescription(
         key="pv_surplus_forecast",
@@ -211,7 +218,7 @@ class PlannerSensor(EvChargePlannerEntity, SensorEntity):
         self.entity_description = description
 
     @property
-    def native_value(self) -> float | datetime | None:
+    def native_value(self) -> float | str | datetime | None:
         data = self.coordinator.data
         return None if data is None else self.entity_description.value_fn(data)
 

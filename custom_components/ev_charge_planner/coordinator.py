@@ -61,6 +61,7 @@ from .planner import (
     pv_charge_time,
     pv_energy_until,
     pv_eta,
+    pv_phase,
     trip_target_soc,
 )
 
@@ -106,6 +107,7 @@ class PlannerData:
     nowcast_factor: float
     charging_power_w: float | None
     forecast: ForecastSummary
+    pv_phase: str
     scenarios: dict[str, ScenarioResult] = field(default_factory=dict)
     deadline: DeadlineResult | None = None
 
@@ -255,9 +257,9 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
         limit = self._float_state(CONF_CHARGE_LIMIT_ENTITY)
         slots, missing = self._forecast_slots()
         baseline_w = self._baseline_w(now)
-        factor = nowcast_factor(
-            self._float_state(CONF_PV_POWER_ENTITY), forecast_power_at(slots, now)
-        )
+        pv_w = self._float_state(CONF_PV_POWER_ENTITY)
+        factor = nowcast_factor(pv_w, forecast_power_at(slots, now))
+        day_start = dt_util.start_of_local_day()
 
         data = PlannerData(
             soc=soc,
@@ -277,6 +279,9 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
                 horizon_end=slots[-1].end if slots else None,
                 peak_w=max((s.pv_w for s in slots if s.end > now), default=0.0),
                 entities_without_data=missing,
+            ),
+            pv_phase=pv_phase(
+                now, pv_w, slots, day_start, day_start + timedelta(days=1)
             ),
         )
 

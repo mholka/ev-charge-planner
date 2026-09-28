@@ -205,6 +205,15 @@
       "latest_grid_start": {
         "name": "Start grid charging by"
       },
+      "pv_phase": {
+        "name": "Solar production phase",
+        "state": {
+          "before_production": "Before solar production",
+          "producing": "Producing",
+          "paused": "Paused (too little sun)",
+          "after_production": "After solar production"
+        }
+      },
       "pv_surplus_forecast": {
         "name": "Solar energy available for the car"
       },
