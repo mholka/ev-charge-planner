@@ -5,6 +5,10 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from custom_components.ev_charge_planner.planner import (
+    PV_PHASE_AFTER,
+    PV_PHASE_BEFORE,
+    PV_PHASE_PAUSED,
+    PV_PHASE_PRODUCING,
     ChargerParams,
     PvChargeTime,
     Slot,
@@ -17,6 +21,7 @@ from custom_components.ev_charge_planner.planner import (
     pv_charge_time,
     pv_energy_until,
     pv_eta,
+    pv_phase,
     surplus_charge_power,
     trip_target_soc,
 )
@@ -271,3 +276,29 @@ def test_solar_share() -> None:
     assert result is not None
     assert result.duration == timedelta(hours=1)
     assert result.grid_kwh == pytest.approx(0.68)
+
+
+def test_pv_phase() -> None:
+    day = datetime(2026, 6, 1, tzinfo=UTC)
+    end = day + timedelta(days=1)
+    slots = [
+        Slot(day + timedelta(hours=h), day + timedelta(hours=h + 1), w)
+        for h, w in ((5, 0), (6, 800), (12, 3000), (19, 200), (20, 0))
+    ]
+
+    def phase(hour: float, pv_w: float | None) -> str:
+        return pv_phase(day + timedelta(hours=hour), pv_w, slots, day, end)
+
+    assert phase(4, 0) == PV_PHASE_BEFORE
+    assert phase(4, None) == PV_PHASE_BEFORE
+    assert phase(6.5, 900) == PV_PHASE_PRODUCING
+    assert phase(12.5, 10) == PV_PHASE_PAUSED
+    assert phase(12.5, None) == PV_PHASE_PRODUCING
+    assert phase(20.5, 0) == PV_PHASE_AFTER
+    assert phase(20.5, 120) == PV_PHASE_PRODUCING  # actual power wins
+    # Tomorrow's forecast doesn't make tonight "before production".
+    assert pv_phase(day + timedelta(hours=22), 0, slots, day, end) == PV_PHASE_AFTER
+    assert pv_phase(
+        end + timedelta(hours=1), 0, slots, end, end + timedelta(days=1)
+    ) == (PV_PHASE_AFTER)
+    assert pv_phase(day, 0, [], day, end) == PV_PHASE_AFTER

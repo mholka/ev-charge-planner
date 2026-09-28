@@ -14,6 +14,13 @@ NOWCAST_MIN = 0.3
 NOWCAST_MAX = 2.0
 NOWCAST_MIN_FORECAST_W = 100.0
 DEADLINE_RESOLUTION = timedelta(minutes=1)
+PV_PRODUCING_MIN_W = 50.0
+
+PV_PHASE_BEFORE = "before_production"
+PV_PHASE_PRODUCING = "producing"
+PV_PHASE_PAUSED = "paused"
+PV_PHASE_AFTER = "after_production"
+PV_PHASES = (PV_PHASE_BEFORE, PV_PHASE_PRODUCING, PV_PHASE_PAUSED, PV_PHASE_AFTER)
 
 
 @dataclass(frozen=True)
@@ -129,6 +136,38 @@ def forecast_power_at(slots: Sequence[Slot], when: datetime) -> float | None:
         if slot.start <= when < slot.end:
             return slot.pv_w
     return None
+
+
+def pv_phase(
+    now: datetime,
+    actual_pv_w: float | None,
+    slots: Sequence[Slot],
+    day_start: datetime,
+    day_end: datetime,
+) -> str:
+    """Phase of the solar day: before, during or after PV production.
+
+    Actual PV power decides whether it is producing; when it isn't (or is
+    unknown), today's forecast [day_start, day_end) tells whether production
+    is still to come, already over, or only interrupted (clouds). Without a
+    forecast, no production counts as after production.
+    """
+    if actual_pv_w is not None and actual_pv_w >= PV_PRODUCING_MIN_W:
+        return PV_PHASE_PRODUCING
+    sunny = [
+        s
+        for s in slots
+        if s.pv_w >= PV_PRODUCING_MIN_W and s.end > day_start and s.start < day_end
+    ]
+    if not sunny:
+        return PV_PHASE_AFTER
+    if now < sunny[0].start:
+        return PV_PHASE_BEFORE
+    if now >= sunny[-1].end:
+        return PV_PHASE_AFTER
+    if actual_pv_w is None:
+        return PV_PHASE_PRODUCING
+    return PV_PHASE_PAUSED
 
 
 def nowcast_factor(actual_pv_w: float | None, forecast_pv_w: float | None) -> float:
