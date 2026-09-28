@@ -23,7 +23,9 @@ from .const import (
     CONF_BATTERY_CAPACITY_KWH,
     CONF_CHARGE_EFFICIENCY,
     CONF_CHARGE_LIMIT_ENTITY,
+    CONF_CHARGER_MAX_POWER_1P_W,
     CONF_CHARGER_MAX_POWER_W,
+    CONF_CHARGER_MIN_POWER_1P_W,
     CONF_CHARGER_MIN_POWER_W,
     CONF_CONSUMPTION_KM_PER_KWH,
     CONF_DISTANCE_KM,
@@ -31,6 +33,7 @@ from .const import (
     CONF_FORECAST_EXTRA_ENTITIES,
     CONF_FORECAST_TOMORROW_ENTITY,
     CONF_HOUSE_LOAD_ENTITY,
+    CONF_PHASE_SWITCHING,
     CONF_PV_POWER_ENTITY,
     CONF_ROUND_TRIP,
     CONF_SOC_ENTITY,
@@ -132,6 +135,9 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
         self.charger = ChargerParams(
             p_min_w=float(self.conf[CONF_CHARGER_MIN_POWER_W]),
             p_max_w=float(self.conf[CONF_CHARGER_MAX_POWER_W]),
+            phase_switching=bool(self.conf[CONF_PHASE_SWITCHING]),
+            p_min_1p_w=float(self.conf[CONF_CHARGER_MIN_POWER_1P_W]),
+            p_max_1p_w=float(self.conf[CONF_CHARGER_MAX_POWER_1P_W]),
         )
         self.baseline = RollingAverage(
             timedelta(minutes=float(self.conf[CONF_BASELINE_WINDOW_MIN]))

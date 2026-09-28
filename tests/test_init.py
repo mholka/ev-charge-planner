@@ -128,6 +128,17 @@ async def test_pv_charge_time_extrapolated_and_extra_days(hass: HomeAssistant) -
     ] == ["sensor.solcast_day_3"]
 
 
+@pytest.mark.parametrize(("switching", "has_eta"), [(False, False), (True, True)])
+async def test_pv_eta_phase_switching(
+    hass: HomeAssistant, switching: bool, has_eta: bool
+) -> None:
+    # 3.5 kW PV - 500 W baseline = 3 kW: only usable on one phase
+    set_sources(hass, soc=70, limit=80, pv_kw=3.5)
+    await _setup(hass, extra={"phase_switching": switching})
+    state = hass.states.get("sensor.ev_full_eta_pv").state
+    assert (state != "unknown") is has_eta
+
+
 async def test_deadline(hass: HomeAssistant) -> None:
     set_sources(hass, soc=50, limit=80)
     await _setup(hass)

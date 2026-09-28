@@ -27,6 +27,7 @@ Settings → Devices & services → Add integration → **EV Charge Planner**. E
 | Solcast forecast day 3+ | optional, several allowed (Solcast day 3–7 sensors); extends the PV horizon |
 | Battery capacity, consumption (km/kWh), efficiency | vehicle model; energy needed = ΔSoC × capacity / efficiency |
 | Charger min / max power | surplus below *min* is not used; charging never exceeds *max* |
+| Automatic 1/3-phase switching | if the wallbox drops to one phase on low surplus: PV counts from the single-phase minimum (≈1.4 kW) up to the single-phase maximum (≈3.7 kW); between that and the 3-phase minimum it stays at the single-phase maximum |
 | Arrival reserve | SoC to keep on arrival for trip scenarios |
 | House baseline mode | **Rolling average** of house consumption over a window, or a **fixed** value in W |
 
@@ -65,7 +66,7 @@ Diagnostics:
 
 ## How it works
 
-- **PV ETA**: walks forecast slots from now; surplus = forecast PV − house baseline (current slot scaled by actual/forecast PV, clamped 0.3–2). The charger runs at `min(surplus, max)` when surplus ≥ min, otherwise not at all. Forecast gaps count as no PV.
+- **PV ETA**: walks forecast slots from now; surplus = forecast PV − house baseline (current slot scaled by actual/forecast PV, clamped 0.3–2). The charger runs at `min(surplus, max)` when surplus ≥ min; with phase switching it runs on one phase for smaller surplus; otherwise not at all. Forecast gaps count as no PV.
 - **Deadline**: charge on PV surplus, then switch to full power at the latest moment *s* where `PV(now → s) + P_max × (deadline − s) ≥ energy needed`.
 - **PV charge time**: the charging hours from the same walk. If the target is beyond the forecast horizon, the remainder is extrapolated at the average PV charging power (`extrapolated: true`).
 - Updates every 5 minutes and immediately when SoC, charge limit, forecast, deadline or deadline scenario change.

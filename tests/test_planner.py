@@ -229,3 +229,31 @@ def test_pv_charge_time_no_surplus() -> None:
 
 def test_pv_charge_time_nothing_needed() -> None:
     assert pv_charge_time(NOW, 0, [], 500, CHARGER) == PvChargeTime(timedelta(0), False)
+
+
+SWITCHING = ChargerParams(p_min_w=4140, p_max_w=11000, phase_switching=True)
+
+
+@pytest.mark.parametrize(
+    ("surplus", "expected"),
+    [
+        (1000, 0),  # below 1φ minimum
+        (1380, 1380),  # 1φ minimum
+        (2500, 2500),  # 1φ
+        (3680, 3680),  # 1φ maximum
+        (3900, 3680),  # gap between 1φ max and 3φ min: stays at 1φ max
+        (4140, 4140),  # 3φ minimum
+        (15000, 11000),  # 3φ capped
+    ],
+)
+def test_surplus_charge_power_phase_switching(surplus: float, expected: float) -> None:
+    assert surplus_charge_power(surplus, SWITCHING) == expected
+
+
+def test_pv_eta_small_system_needs_phase_switching() -> None:
+    """5.35 kWp in autumn: ~4 kW peak minus ~530 W house load never reaches 3φ min."""
+    s = slots(2500, 3500, 4000, 4000, 3500, 2500)
+    assert pv_eta(NOW, 10, s, 530, CHARGER) is None
+    eta = pv_eta(NOW, 10, s, 530, SWITCHING)
+    assert eta is not None
+    assert NOW + timedelta(hours=3) < eta < NOW + timedelta(hours=4)

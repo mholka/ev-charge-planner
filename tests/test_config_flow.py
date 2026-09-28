@@ -10,8 +10,11 @@ from custom_components.ev_charge_planner.const import (
     CONF_BASELINE_FIXED_W,
     CONF_BASELINE_MODE,
     CONF_CHARGE_LIMIT_ENTITY,
+    CONF_CHARGER_MAX_POWER_1P_W,
+    CONF_CHARGER_MIN_POWER_1P_W,
     CONF_CHARGER_MIN_POWER_W,
     CONF_DISTANCE_KM,
+    CONF_PHASE_SWITCHING,
     CONF_ROUND_TRIP,
     CONF_TRIP_NAME,
     DOMAIN,
@@ -32,6 +35,17 @@ async def test_user_flow(hass: HomeAssistant) -> None:
         result["flow_id"], {**CONFIG, CONF_CHARGER_MIN_POWER_W: 20000}
     )
     assert result["errors"] == {CONF_CHARGER_MIN_POWER_W: "min_above_max"}
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            **CONFIG,
+            CONF_PHASE_SWITCHING: True,
+            CONF_CHARGER_MIN_POWER_1P_W: 4000,
+            CONF_CHARGER_MAX_POWER_1P_W: 3000,
+        },
+    )
+    assert result["errors"] == {CONF_CHARGER_MIN_POWER_1P_W: "min_above_max"}
 
     result = await hass.config_entries.flow.async_configure(result["flow_id"], CONFIG)
     assert result["type"] is FlowResultType.CREATE_ENTRY
