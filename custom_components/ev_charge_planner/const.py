@@ -12,6 +12,7 @@ CONF_HOUSE_LOAD_ENTITY = "house_load_entity"
 CONF_WALLBOX_POWER_ENTITY = "wallbox_power_entity"
 CONF_FORECAST_ENTITY = "forecast_entity"
 CONF_FORECAST_TOMORROW_ENTITY = "forecast_tomorrow_entity"
+CONF_FORECAST_EXTRA_ENTITIES = "forecast_extra_entities"
 
 CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"
 CONF_CONSUMPTION_KM_PER_KWH = "consumption_km_per_kwh"

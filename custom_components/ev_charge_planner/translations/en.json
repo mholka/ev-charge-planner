@@ -20,13 +20,15 @@
           "soc_reserve_pct": "Arrival reserve for trips",
           "baseline_mode": "House baseline mode",
           "baseline_window_min": "Rolling baseline window",
-          "baseline_fixed_w": "Fixed baseline"
+          "baseline_fixed_w": "Fixed baseline",
+          "forecast_extra_entities": "Solcast forecast day 3+"
         },
         "data_description": {
           "charge_limit_entity": "Target for the \"full\" scenario. Without it, 100 % is used.",
           "charger_min_power_w": "Lowest power the wallbox can charge at (≈1.4 kW single-phase, ≈4.1 kW three-phase). Surplus below this is not used.",
           "baseline_mode": "Household load subtracted from forecast PV: rolling average of the house consumption sensor, or a fixed value.",
-          "baseline_fixed_w": "Used in fixed mode, and as fallback in rolling mode until house load data is available."
+          "baseline_fixed_w": "Used in fixed mode, and as fallback in rolling mode until house load data is available.",
+          "forecast_extra_entities": "Optional later days (Solcast day 3–7 sensors) to extend the PV horizon beyond tomorrow."
         }
       }
     },
@@ -57,7 +59,15 @@
           "soc_reserve_pct": "Arrival reserve for trips",
           "baseline_mode": "House baseline mode",
           "baseline_window_min": "Rolling baseline window",
-          "baseline_fixed_w": "Fixed baseline"
+          "baseline_fixed_w": "Fixed baseline",
+          "forecast_extra_entities": "Solcast forecast day 3+"
+        },
+        "data_description": {
+          "charge_limit_entity": "Target for the \"full\" scenario. Without it, 100 % is used.",
+          "charger_min_power_w": "Lowest power the wallbox can charge at (≈1.4 kW single-phase, ≈4.1 kW three-phase). Surplus below this is not used.",
+          "baseline_mode": "Household load subtracted from forecast PV: rolling average of the house consumption sensor, or a fixed value.",
+          "baseline_fixed_w": "Used in fixed mode, and as fallback in rolling mode until house load data is available.",
+          "forecast_extra_entities": "Optional later days (Solcast day 3–7 sensors) to extend the PV horizon beyond tomorrow."
         }
       }
     },
@@ -132,6 +142,12 @@
       "full_energy_needed": {
         "name": "Full energy needed"
       },
+      "full_charge_time_grid": {
+        "name": "Full charge time grid"
+      },
+      "full_charge_time_pv": {
+        "name": "Full charge time PV"
+      },
       "full_eta_grid": {
         "name": "Full ETA grid"
       },
@@ -140,6 +156,12 @@
       },
       "energy_needed": {
         "name": "Energy needed"
+      },
+      "charge_time_grid": {
+        "name": "Charge time grid"
+      },
+      "charge_time_pv": {
+        "name": "Charge time PV"
       },
       "eta_grid": {
         "name": "ETA grid"
@@ -152,6 +174,9 @@
       },
       "latest_grid_start": {
         "name": "Latest grid start"
+      },
+      "pv_surplus_forecast": {
+        "name": "PV surplus forecast"
       },
       "house_baseline": {
         "name": "House baseline"

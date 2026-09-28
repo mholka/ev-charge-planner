@@ -30,6 +30,7 @@ from .const import (
     CONF_CONSUMPTION_KM_PER_KWH,
     CONF_DISTANCE_KM,
     CONF_FORECAST_ENTITY,
+    CONF_FORECAST_EXTRA_ENTITIES,
     CONF_FORECAST_TOMORROW_ENTITY,
     CONF_HOUSE_LOAD_ENTITY,
     CONF_PV_POWER_ENTITY,
@@ -49,6 +50,10 @@ _SENSOR_OR_NUMBER = selector.EntitySelector(
     selector.EntitySelectorConfig(domain=["sensor", "number", "input_number"])
 )
 
+_SENSORS_MULTI = selector.EntitySelector(
+    selector.EntitySelectorConfig(domain="sensor", multiple=True)
+)
+
 _REQUIRED_ENTITIES = (
     CONF_SOC_ENTITY,
     CONF_PV_POWER_ENTITY,
@@ -59,6 +64,7 @@ _OPTIONAL_ENTITIES = (
     CONF_CHARGE_LIMIT_ENTITY,
     CONF_WALLBOX_POWER_ENTITY,
     CONF_FORECAST_TOMORROW_ENTITY,
+    CONF_FORECAST_EXTRA_ENTITIES,
 )
 
 
@@ -98,7 +104,10 @@ def _schema(values: dict[str, Any]) -> vol.Schema:
         selector_ = _SENSOR_OR_NUMBER if key == CONF_SOC_ENTITY else _SENSOR
         fields[vol.Required(key, default=values.get(key, vol.UNDEFINED))] = selector_
     for key in _OPTIONAL_ENTITIES:
-        selector_ = _SENSOR_OR_NUMBER if key == CONF_CHARGE_LIMIT_ENTITY else _SENSOR
+        selector_ = {
+            CONF_CHARGE_LIMIT_ENTITY: _SENSOR_OR_NUMBER,
+            CONF_FORECAST_EXTRA_ENTITIES: _SENSORS_MULTI,
+        }.get(key, _SENSOR)
         if values.get(key):
             fields[vol.Optional(key, description={"suggested_value": values[key]})] = (
                 selector_

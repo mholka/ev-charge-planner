@@ -6,6 +6,7 @@ import pytest
 
 from custom_components.ev_charge_planner.planner import (
     ChargerParams,
+    PvChargeTime,
     Slot,
     VehicleParams,
     deadline_plan,
@@ -13,6 +14,7 @@ from custom_components.ev_charge_planner.planner import (
     forecast_power_at,
     grid_eta,
     nowcast_factor,
+    pv_charge_time,
     pv_energy_until,
     pv_eta,
     surplus_charge_power,
@@ -200,3 +202,30 @@ def test_deadline_in_past() -> None:
     result = deadline_plan(NOW, NOW - timedelta(hours=1), 5, [], 500, CHARGER)
     assert result.at_risk
     assert result.grid_topup_kwh == 5
+
+
+def test_pv_charge_time_within_horizon() -> None:
+    # 9 kWh at 6 kW = 1.5 h of charging, even though the PV is spread over a gap
+    s = [
+        Slot(NOW, NOW + timedelta(hours=1), 6500),
+        Slot(NOW + timedelta(hours=10), NOW + timedelta(hours=11), 6500),
+    ]
+    result = pv_charge_time(NOW, 9, s, 500, CHARGER)
+    assert result == PvChargeTime(timedelta(hours=1.5), False)
+
+
+def test_pv_charge_time_extrapolated() -> None:
+    # 2 h at 6 kW = 12 kWh in the forecast; 30 kWh needs 5 h at the same rate
+    result = pv_charge_time(NOW, 30, slots(6500, 6500), 500, CHARGER)
+    assert result is not None
+    assert result.extrapolated
+    assert result.duration == timedelta(hours=5)
+
+
+def test_pv_charge_time_no_surplus() -> None:
+    assert pv_charge_time(NOW, 5, slots(3000, 3000), 500, CHARGER) is None
+    assert pv_charge_time(NOW, 5, [], 500, CHARGER) is None
+
+
+def test_pv_charge_time_nothing_needed() -> None:
+    assert pv_charge_time(NOW, 0, [], 500, CHARGER) == PvChargeTime(timedelta(0), False)
