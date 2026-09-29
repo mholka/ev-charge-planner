@@ -15,6 +15,8 @@ NOWCAST_MAX = 2.0
 NOWCAST_MIN_FORECAST_W = 100.0
 DEADLINE_RESOLUTION = timedelta(minutes=1)
 PV_PRODUCING_MIN_W = 50.0
+# How long the measured PV power is assumed to hold before the forecast takes over.
+LIVE_PV_HOLD = timedelta(minutes=30)
 
 PV_PHASE_BEFORE = "before_production"
 PV_PHASE_PRODUCING = "producing"
@@ -168,6 +170,40 @@ def pv_phase(
     if actual_pv_w is None:
         return PV_PHASE_PRODUCING
     return PV_PHASE_PAUSED
+
+
+def with_live_pv(
+    now: datetime,
+    actual_pv_w: float | None,
+    slots: Sequence[Slot],
+    hold: timedelta = LIVE_PV_HOLD,
+) -> list[Slot]:
+    """Slots with the measured PV power for [now, now + hold).
+
+    What the panels produce right now beats any forecast for the near term, and
+    it keeps the planner working when the forecast is missing or far off. The
+    forecast still applies after `hold` (or from its next slot, if sooner).
+    """
+    if actual_pv_w is None:
+        return list(slots)
+    live_end = now + hold
+    for slot in slots:
+        if slot.start > now:
+            live_end = min(live_end, slot.start)
+            break
+        if slot.start <= now < slot.end:
+            break
+    result: list[Slot] = []
+    for slot in slots:
+        if slot.end <= now or slot.start >= live_end:
+            result.append(slot)
+            continue
+        if slot.start < now:
+            result.append(Slot(slot.start, now, slot.pv_w))
+        if slot.end > live_end:
+            result.append(Slot(live_end, slot.end, slot.pv_w))
+    result.append(Slot(now, live_end, max(0.0, actual_pv_w)))
+    return sorted(result, key=lambda s: s.start)
 
 
 def nowcast_factor(actual_pv_w: float | None, forecast_pv_w: float | None) -> float:
