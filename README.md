@@ -49,6 +49,7 @@ For *Full* and *Quick trip* (device **EV**, e.g. "Full: charging time on solar")
 | Entity | Meaning |
 |---|---|
 | `sensor.ev_<scenario>_energy_needed` | kWh the wallbox has to deliver (attributes: `target_soc`, `reachable`) |
+| `sensor.ev_<trip>_trip_energy` | kWh the trip itself uses, charging losses included; doesn't depend on SoC (quick trip and trips only) |
 | `sensor.ev_<scenario>_charge_time_grid` | charging time at max charger power (duration, like Waze travel time) |
 | `sensor.ev_<scenario>_charge_time_pv` | time the charger has to run on solar, nights excluded (attributes: `done_at`, `extrapolated`, `grid_topup_kwh`); `unknown` if the forecast has no usable surplus |
 | `sensor.ev_<scenario>_eta_grid` | done at max charger power |

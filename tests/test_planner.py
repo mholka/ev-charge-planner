@@ -24,6 +24,7 @@ from custom_components.ev_charge_planner.planner import (
     pv_eta,
     pv_phase,
     surplus_charge_power,
+    trip_energy_kwh,
     trip_target_soc,
     with_live_pv,
 )
@@ -45,6 +46,13 @@ def test_trip_target_soc() -> None:
     assert trip_target_soc(150, True, VEHICLE) == pytest.approx(90)
     assert trip_target_soc(150, False, VEHICLE) == pytest.approx(50)
     assert trip_target_soc(300, True, VEHICLE) > 100
+
+
+def test_trip_energy() -> None:
+    # 150 km round trip = 300 km / 5 km/kWh = 60 kWh at the battery, / 0.9 losses
+    assert trip_energy_kwh(150, True, VEHICLE) == pytest.approx(60 / 0.9)
+    assert trip_energy_kwh(150, False, VEHICLE) == pytest.approx(30 / 0.9)
+    assert trip_energy_kwh(0, True, VEHICLE) == 0
 
 
 def test_energy_needed() -> None:

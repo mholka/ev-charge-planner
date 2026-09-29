@@ -69,6 +69,11 @@ async def test_setup_and_unload(hass: HomeAssistant) -> None:
     # Office: 40 km / 5 / 75 = 10.7 % + 10 % reserve < 50 % SoC
     assert hass.states.get("binary_sensor.ev_office_ready").state == "on"
     assert hass.states.get("sensor.ev_office_energy_needed").state == "0.0"
+    # The trip itself still uses 40 km / 5 km/kWh / 0.9, whatever the SoC.
+    assert float(
+        hass.states.get("sensor.ev_office_trip_energy").state
+    ) == pytest.approx(8 / 0.9, abs=0.01)
+    assert hass.states.get("sensor.ev_full_trip_energy") is None
     assert hass.states.get("select.ev_deadline_scenario").attributes["options"] == [
         "Full",
         "Quick trip",
@@ -158,6 +163,9 @@ async def test_quick_trip(hass: HomeAssistant) -> None:
     energy = hass.states.get("sensor.ev_quick_trip_energy_needed")
     assert float(energy.state) == pytest.approx(25.0)
     assert energy.attributes["target_soc"] == 50.0
+    assert float(
+        hass.states.get("sensor.ev_quick_trip_trip_energy").state
+    ) == pytest.approx(30 / 0.9, abs=0.01)
     assert hass.states.get("binary_sensor.ev_quick_trip_ready").state == "off"
     grid = float(hass.states.get("sensor.ev_quick_trip_charge_time_grid").state)
     assert grid == pytest.approx(25 / 11 * 60, abs=0.2)

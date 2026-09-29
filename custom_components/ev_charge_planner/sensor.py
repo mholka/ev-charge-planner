@@ -17,7 +17,7 @@ from homeassistant.const import EntityCategory, UnitOfEnergy, UnitOfPower, UnitO
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import MAIN_SCENARIOS
+from .const import MAIN_SCENARIOS, SCENARIO_QUICK_TRIP
 from .coordinator import (
     EvChargePlannerConfigEntry,
     EvChargePlannerCoordinator,
@@ -89,6 +89,17 @@ SCENARIO_SENSORS = (
     ),
 )
 
+# Only for trip scenarios (quick trip and trip subentries), not "full".
+TRIP_ENERGY_SENSOR = ScenarioSensorDescription(
+    key="trip_energy",
+    device_class=SensorDeviceClass.ENERGY,
+    native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    suggested_display_precision=1,
+    value_fn=lambda s: (
+        None if s.trip_energy_kwh is None else round(s.trip_energy_kwh, 2)
+    ),
+)
+
 PLANNER_SENSORS = (
     PlannerSensorDescription(
         key="deadline_grid_topup",
@@ -154,6 +165,7 @@ async def async_setup_entry(
                 for scenario_id in MAIN_SCENARIOS
                 for desc in SCENARIO_SENSORS
             ),
+            ScenarioSensor(coordinator, TRIP_ENERGY_SENSOR, SCENARIO_QUICK_TRIP),
             *(PlannerSensor(coordinator, desc) for desc in PLANNER_SENSORS),
         ]
     )
@@ -161,7 +173,7 @@ async def async_setup_entry(
         async_add_entities(
             [
                 ScenarioSensor(coordinator, desc, subentry_id)
-                for desc in SCENARIO_SENSORS
+                for desc in (*SCENARIO_SENSORS, TRIP_ENERGY_SENSOR)
             ],
             config_subentry_id=subentry_id,
         )
