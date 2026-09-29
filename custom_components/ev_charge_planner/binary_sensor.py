@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from homeassistant.components.binary_sensor import (
-    BinarySensorDeviceClass,
-    BinarySensorEntity,
-)
+from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -24,7 +21,7 @@ async def async_setup_entry(
     async_add_entities(
         [
             *(ReadySensor(coordinator, s) for s in MAIN_SCENARIOS),
-            DeadlineAtRiskSensor(coordinator),
+            ReadyOnTimeSensor(coordinator),
         ]
     )
     for subentry_id in coordinator.trips:
@@ -53,18 +50,17 @@ class ReadySensor(EvChargePlannerEntity, BinarySensorEntity):
         return None if scenario is None else scenario.ready
 
 
-class DeadlineAtRiskSensor(EvChargePlannerEntity, BinarySensorEntity):
-    """On when the deadline target cannot be met even with grid charging from now."""
+class ReadyOnTimeSensor(EvChargePlannerEntity, BinarySensorEntity):
+    """On when the departure target can still be met (grid charging from now)."""
 
-    _attr_device_class = BinarySensorDeviceClass.PROBLEM
     _platform_domain = "binary_sensor"
 
     def __init__(self, coordinator: EvChargePlannerCoordinator) -> None:
-        super().__init__(coordinator, "deadline_at_risk")
+        super().__init__(coordinator, "ready_on_time")
 
     @property
     def is_on(self) -> bool | None:
         data = self.coordinator.data
         if data is None or data.deadline is None:
             return None
-        return data.deadline.at_risk
+        return not data.deadline.at_risk

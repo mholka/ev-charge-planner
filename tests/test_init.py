@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntryState, ConfigSubentryData
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -208,7 +209,7 @@ async def test_deadline(hass: HomeAssistant) -> None:
     ) == pytest.approx(25.0)
     start = dt_util.parse_datetime(hass.states.get("sensor.ev_latest_grid_start").state)
     assert abs(start - (deadline - timedelta(hours=25 / 11))) <= timedelta(minutes=1)
-    assert hass.states.get("binary_sensor.ev_deadline_at_risk").state == "off"
+    assert hass.states.get("binary_sensor.ev_ready_on_time").state == "on"
 
     await hass.services.async_call(
         "datetime",
@@ -220,4 +221,23 @@ async def test_deadline(hass: HomeAssistant) -> None:
         blocking=True,
     )
     await hass.async_block_till_done()
-    assert hass.states.get("binary_sensor.ev_deadline_at_risk").state == "on"
+    assert hass.states.get("binary_sensor.ev_ready_on_time").state == "off"
+
+
+async def test_old_deadline_at_risk_entity_removed(hass: HomeAssistant) -> None:
+    set_sources(hass, soc=50, limit=80)
+    entry = MockConfigEntry(domain=DOMAIN, data=CONFIG)
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    registry.async_get_or_create(
+        "binary_sensor",
+        DOMAIN,
+        f"{entry.entry_id}_deadline_at_risk",
+        suggested_object_id="ev_deadline_at_risk",
+        config_entry=entry,
+    )
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert registry.async_get("binary_sensor.ev_deadline_at_risk") is None
+    assert registry.async_get("binary_sensor.ev_ready_on_time") is not None

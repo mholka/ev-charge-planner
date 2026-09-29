@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 
+from .const import DOMAIN
 from .coordinator import EvChargePlannerConfigEntry, EvChargePlannerCoordinator
 
 PLATFORMS = [
@@ -21,6 +23,13 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: EvChargePlannerConfigEntry
 ) -> bool:
     """Set up EV Charge Planner from a config entry."""
+    # "Won't be ready by departure" became "Will be ready on time" (inverted).
+    registry = er.async_get(hass)
+    if old := registry.async_get_entity_id(
+        "binary_sensor", DOMAIN, f"{entry.entry_id}_deadline_at_risk"
+    ):
+        registry.async_remove(old)
+
     coordinator = EvChargePlannerCoordinator(hass, entry)
     coordinator.async_setup_listeners()
     await coordinator.async_config_entry_first_refresh()

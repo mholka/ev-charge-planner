@@ -53,7 +53,7 @@ For *Full* and *Quick trip* (device **EV**, e.g. "Full: charging time on solar")
 | `sensor.ev_<scenario>_charge_time_pv` | time the charger has to run on solar, nights excluded (attributes: `done_at`, `extrapolated`, `grid_topup_kwh`); `unknown` if the forecast has no usable surplus |
 | `sensor.ev_<scenario>_eta_grid` | done at max charger power |
 | `sensor.ev_<scenario>_eta_pv` | done on PV surplus only; `unknown` if not reached within the forecast |
-| `binary_sensor.ev_<scenario>_ready` | SoC ≥ target |
+| `binary_sensor.ev_<scenario>_ready` (*Yes*/*No*) | SoC ≥ target |
 
 Deadline planning:
 
@@ -63,7 +63,7 @@ Deadline planning:
 | `select.ev_deadline_scenario` (*Charge for*) | Full, Quick trip or a saved trip |
 | `sensor.ev_deadline_grid_topup` (*Grid energy needed before departure*) | kWh that must come from the grid |
 | `sensor.ev_latest_grid_start` (*Start grid charging by*) | latest time to switch to full-power charging; `unknown` if solar suffices |
-| `binary_sensor.ev_deadline_at_risk` (*Won't be ready by departure*) | the target cannot be met even with grid charging from now |
+| `binary_sensor.ev_ready_on_time` (*Will be ready on time*, *Yes*/*No*) | *Yes* while the departure target can still be met, at the latest by grid charging from now |
 
 Diagnostics:
 - `sensor.ev_house_baseline` (W; attributes `nowcast_factor`, `charging_power_w`)
