@@ -125,8 +125,10 @@ PLANNER_SENSORS = (
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         entity_category=EntityCategory.DIAGNOSTIC,
         suggested_display_precision=1,
-        value_fn=lambda d: round(d.forecast.surplus_kwh, 2),
+        value_fn=lambda d: round(d.forecast.today_kwh, 2),
         attrs_fn=lambda d: {
+            "tomorrow_kwh": round(d.forecast.tomorrow_kwh, 2),
+            "horizon_kwh": round(d.forecast.horizon_kwh, 2),
             "forecast_slots": d.forecast.slots,
             "horizon_end": d.forecast.horizon_end,
             "peak_forecast_w": round(d.forecast.peak_w),

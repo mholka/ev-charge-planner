@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 
+from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import ConfigEntryState, ConfigSubentryData
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
@@ -249,3 +250,31 @@ async def test_old_deadline_at_risk_entity_removed(hass: HomeAssistant) -> None:
 
     assert registry.async_get("binary_sensor.ev_deadline_at_risk") is None
     assert registry.async_get("binary_sensor.ev_ready_on_time") is not None
+
+
+async def test_solar_energy_split_today_tomorrow(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    day_start = dt_util.start_of_local_day()
+    freezer.move_to(day_start + timedelta(hours=14, minutes=30))
+    set_sources(hass, soc=10, limit=100, pv_kw=8.0)
+    # 8 kW all day today and tomorrow -> 7.5 kW surplus in every slot.
+    hass.states.async_set(
+        ENTITIES["forecast_entity"],
+        "1",
+        {
+            "detailedForecast": [
+                {
+                    "period_start": day_start + timedelta(minutes=30 * i),
+                    "pv_estimate": 8.0,
+                }
+                for i in range(96)
+            ]
+        },
+    )
+    await _setup(hass)
+
+    state = hass.states.get("sensor.ev_pv_surplus_forecast")
+    assert float(state.state) == pytest.approx(9.5 * 7.5, abs=0.1)
+    assert state.attributes["tomorrow_kwh"] == pytest.approx(24 * 7.5, abs=0.1)
+    assert state.attributes["horizon_kwh"] == pytest.approx(33.5 * 7.5, abs=0.1)

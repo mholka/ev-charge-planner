@@ -95,7 +95,9 @@ class ScenarioResult:
 class ForecastSummary:
     """What the planner saw of the PV forecast (diagnostics)."""
 
-    surplus_kwh: float
+    today_kwh: float
+    tomorrow_kwh: float
+    horizon_kwh: float
     slots: int
     horizon_end: datetime | None
     peak_w: float
@@ -268,6 +270,11 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
         # The measured PV replaces the nowcast-scaled forecast for the near term.
         slots = with_live_pv(now, pv_w, slots)
         day_start = dt_util.start_of_local_day()
+        day_end = day_start + timedelta(days=1)
+        horizon_end = slots[-1].end if slots else now
+
+        def surplus_kwh(start: datetime, end: datetime) -> float:
+            return pv_energy_until(start, end, slots, baseline_w, self.charger)
 
         data = PlannerData(
             soc=soc,
@@ -275,13 +282,9 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
             nowcast_factor=factor,
             charging_power_w=self._float_state(CONF_WALLBOX_POWER_ENTITY),
             forecast=ForecastSummary(
-                surplus_kwh=pv_energy_until(
-                    now,
-                    slots[-1].end if slots else now,
-                    slots,
-                    baseline_w,
-                    self.charger,
-                ),
+                today_kwh=surplus_kwh(now, day_end),
+                tomorrow_kwh=surplus_kwh(day_end, day_end + timedelta(days=1)),
+                horizon_kwh=surplus_kwh(now, horizon_end),
                 slots=len(forecast_slots),
                 horizon_end=slots[-1].end if slots else None,
                 live_pv_w=pv_w,
@@ -290,9 +293,7 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
                 ),
                 entities_without_data=missing,
             ),
-            pv_phase=pv_phase(
-                now, pv_w, forecast_slots, day_start, day_start + timedelta(days=1)
-            ),
+            pv_phase=pv_phase(now, pv_w, forecast_slots, day_start, day_end),
         )
 
         trips: dict[str, tuple[str, float, bool]] = {
