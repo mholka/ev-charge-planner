@@ -22,5 +22,6 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
-          # Brand icons live in home-assistant/brands; not submitted yet.
+          # The icon ships in the brand/ folder (HA 2026.3+); the brands repo no
+          # longer accepts custom integrations.
           ignore: brands
