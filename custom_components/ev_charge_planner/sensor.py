@@ -119,6 +119,8 @@ PLANNER_SENSORS = (
             "forecast_slots": d.forecast.slots,
             "horizon_end": d.forecast.horizon_end,
             "peak_forecast_w": round(d.forecast.peak_w),
+            "live_pv_w": d.forecast.live_pv_w,
+            "no_forecast_data": d.forecast.slots == 0,
             "entities_without_data": d.forecast.entities_without_data,
         },
     ),

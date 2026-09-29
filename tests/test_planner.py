@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from custom_components.ev_charge_planner.planner import (
+    LIVE_PV_HOLD,
     PV_PHASE_AFTER,
     PV_PHASE_BEFORE,
     PV_PHASE_PAUSED,
@@ -24,6 +25,7 @@ from custom_components.ev_charge_planner.planner import (
     pv_phase,
     surplus_charge_power,
     trip_target_soc,
+    with_live_pv,
 )
 
 NOW = datetime(2026, 6, 1, 10, 0, tzinfo=UTC)
@@ -302,3 +304,36 @@ def test_pv_phase() -> None:
         end + timedelta(hours=1), 0, slots, end, end + timedelta(days=1)
     ) == (PV_PHASE_AFTER)
     assert pv_phase(day, 0, [], day, end) == PV_PHASE_AFTER
+
+
+def test_with_live_pv_replaces_current_slot() -> None:
+    start = NOW - timedelta(minutes=10)
+    slots = [
+        Slot(start, start + timedelta(hours=1), 1500),
+        Slot(start + timedelta(hours=1), start + timedelta(hours=2), 2000),
+    ]
+    live = with_live_pv(NOW, 6000, slots)
+    assert live == [
+        Slot(start, NOW, 1500),
+        Slot(NOW, NOW + LIVE_PV_HOLD, 6000),
+        Slot(NOW + LIVE_PV_HOLD, start + timedelta(hours=1), 1500),
+        slots[1],
+    ]
+    charger = ChargerParams(4100, 11000)
+    # A low forecast no longer hides a surplus the panels produce right now.
+    assert pv_energy_until(NOW, slots[-1].end, slots, 361, charger) == 0
+    assert pv_energy_until(NOW, slots[-1].end, live, 361, charger) == pytest.approx(
+        (6000 - 361) / 1000 * 0.5
+    )
+
+
+def test_with_live_pv_without_forecast_or_measurement() -> None:
+    assert with_live_pv(NOW, 6000, []) == [Slot(NOW, NOW + LIVE_PV_HOLD, 6000)]
+    assert with_live_pv(NOW, -20, []) == [Slot(NOW, NOW + LIVE_PV_HOLD, 0)]
+    slots = [Slot(NOW + timedelta(minutes=10), NOW + timedelta(hours=1), 3000)]
+    assert with_live_pv(NOW, None, slots) == slots
+    # Live power only fills the gap up to the next forecast slot.
+    assert with_live_pv(NOW, 6000, slots) == [
+        Slot(NOW, NOW + timedelta(minutes=10), 6000),
+        *slots,
+    ]

@@ -63,6 +63,7 @@ from .planner import (
     pv_eta,
     pv_phase,
     trip_target_soc,
+    with_live_pv,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -95,6 +96,7 @@ class ForecastSummary:
     slots: int
     horizon_end: datetime | None
     peak_w: float
+    live_pv_w: float | None
     entities_without_data: list[str]
 
 
@@ -259,6 +261,9 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
         baseline_w = self._baseline_w(now)
         pv_w = self._float_state(CONF_PV_POWER_ENTITY)
         factor = nowcast_factor(pv_w, forecast_power_at(slots, now))
+        forecast_slots = slots
+        # The measured PV replaces the nowcast-scaled forecast for the near term.
+        slots = with_live_pv(now, pv_w, slots)
         day_start = dt_util.start_of_local_day()
 
         data = PlannerData(
@@ -273,15 +278,17 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
                     slots,
                     baseline_w,
                     self.charger,
-                    factor,
                 ),
-                slots=len(slots),
+                slots=len(forecast_slots),
                 horizon_end=slots[-1].end if slots else None,
-                peak_w=max((s.pv_w for s in slots if s.end > now), default=0.0),
+                live_pv_w=pv_w,
+                peak_w=max(
+                    (s.pv_w for s in forecast_slots if s.end > now), default=0.0
+                ),
                 entities_without_data=missing,
             ),
             pv_phase=pv_phase(
-                now, pv_w, slots, day_start, day_start + timedelta(days=1)
+                now, pv_w, forecast_slots, day_start, day_start + timedelta(days=1)
             ),
         )
 
@@ -308,10 +315,8 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
             target = min(raw_target, 100.0)
             energy = energy_needed_kwh(soc, target, self.vehicle)
             eta_grid = grid_eta(now, energy, self.charger)
-            eta_pv = pv_eta(now, energy, slots, baseline_w, self.charger, factor)
-            pv_time = pv_charge_time(
-                now, energy, slots, baseline_w, self.charger, factor
-            )
+            eta_pv = pv_eta(now, energy, slots, baseline_w, self.charger)
+            pv_time = pv_charge_time(now, energy, slots, baseline_w, self.charger)
             data.scenarios[scenario_id] = ScenarioResult(
                 name=name,
                 target_soc=round(raw_target, 1),
@@ -336,6 +341,5 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
                 slots,
                 baseline_w,
                 self.charger,
-                factor,
             )
         return data

@@ -68,7 +68,7 @@ Deadline planning:
 Diagnostics:
 - `sensor.ev_house_baseline` (W; attributes `nowcast_factor`, `charging_power_w`)
 - `sensor.ev_pv_phase`: phase of the solar day, one of `before_production`, `producing`, `paused` (forecast says sun, but PV below 50 W) or `after_production`
-- `sensor.ev_pv_surplus_forecast`: kWh the charger could take from PV surplus within the forecast (attributes `forecast_slots`, `horizon_end`, `peak_forecast_w`, `entities_without_data`). If PV ETAs stay `unknown`, check this first.
+- `sensor.ev_pv_surplus_forecast`: kWh the charger could take from PV surplus: the measured PV power for the next 30 minutes, then the forecast (attributes `forecast_slots`, `horizon_end`, `peak_forecast_w`, `live_pv_w`, `no_forecast_data`, `entities_without_data`). If PV ETAs stay `unknown`, check this first.
 
 ## How it works
 
