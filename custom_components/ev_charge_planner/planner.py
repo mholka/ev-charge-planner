@@ -103,6 +103,14 @@ def trip_target_soc(
     return vehicle.reserve_pct + km / vehicle.km_per_kwh / vehicle.capacity_kwh * 100
 
 
+def trip_energy_kwh(
+    distance_km: float, round_trip: bool, vehicle: VehicleParams
+) -> float:
+    """AC energy (kWh, charging losses included) the trip itself uses."""
+    km = distance_km * (2 if round_trip else 1)
+    return km / vehicle.km_per_kwh / vehicle.efficiency
+
+
 def energy_needed_kwh(soc: float, target_soc: float, vehicle: VehicleParams) -> float:
     """AC energy (kWh) needed to go from soc to target_soc."""
     return max(0.0, target_soc - soc) / 100 * vehicle.capacity_kwh / vehicle.efficiency

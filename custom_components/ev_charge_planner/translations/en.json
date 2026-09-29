@@ -188,6 +188,9 @@
       "quick_trip_energy_needed": {
         "name": "Quick trip: energy to charge"
       },
+      "quick_trip_trip_energy": {
+        "name": "Quick trip: energy the trip uses"
+      },
       "quick_trip_charge_time_grid": {
         "name": "Quick trip: charging time on grid"
       },
@@ -202,6 +205,9 @@
       },
       "energy_needed": {
         "name": "Energy to charge"
+      },
+      "trip_energy": {
+        "name": "Energy the trip uses"
       },
       "charge_time_grid": {
         "name": "Charging time on grid"

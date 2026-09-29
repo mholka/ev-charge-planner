@@ -62,6 +62,7 @@ from .planner import (
     pv_energy_until,
     pv_eta,
     pv_phase,
+    trip_energy_kwh,
     trip_target_soc,
     with_live_pv,
 )
@@ -86,6 +87,8 @@ class ScenarioResult:
     charge_time_pv_extrapolated: bool
     pv_grid_kwh: float | None
     ready: bool
+    # Energy the trip itself uses; None for the "full" scenario.
+    trip_energy_kwh: float | None = None
 
 
 @dataclass
@@ -292,26 +295,38 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
             ),
         )
 
-        targets: dict[str, tuple[str, float]] = {
-            SCENARIO_FULL: (SCENARIO_FULL, limit if limit is not None else 100.0),
+        trips: dict[str, tuple[str, float, bool]] = {
             SCENARIO_QUICK_TRIP: (
                 SCENARIO_QUICK_TRIP,
-                trip_target_soc(
-                    self.quick_trip_km, self.quick_trip_round_trip, self.vehicle
-                ),
+                self.quick_trip_km,
+                self.quick_trip_round_trip,
             ),
-        }
-        for subentry_id, trip in self.trips.items():
-            targets[subentry_id] = (
-                trip["title"],
-                trip_target_soc(
+            **{
+                subentry_id: (
+                    trip["title"],
                     float(trip[CONF_DISTANCE_KM]),
                     bool(trip.get(CONF_ROUND_TRIP, False)),
-                    self.vehicle,
-                ),
-            )
+                )
+                for subentry_id, trip in self.trips.items()
+            },
+        }
+        targets: dict[str, tuple[str, float, float | None]] = {
+            SCENARIO_FULL: (
+                SCENARIO_FULL,
+                limit if limit is not None else 100.0,
+                None,
+            ),
+            **{
+                scenario_id: (
+                    name,
+                    trip_target_soc(km, round_trip, self.vehicle),
+                    trip_energy_kwh(km, round_trip, self.vehicle),
+                )
+                for scenario_id, (name, km, round_trip) in trips.items()
+            },
+        }
 
-        for scenario_id, (name, raw_target) in targets.items():
+        for scenario_id, (name, raw_target, trip_kwh) in targets.items():
             target = min(raw_target, 100.0)
             energy = energy_needed_kwh(soc, target, self.vehicle)
             eta_grid = grid_eta(now, energy, self.charger)
@@ -330,6 +345,7 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
                 and pv_time.extrapolated,
                 pv_grid_kwh=None if pv_time is None else pv_time.grid_kwh,
                 ready=soc >= target,
+                trip_energy_kwh=trip_kwh,
             )
 
         scenario = data.scenarios.get(self.deadline_scenario)
