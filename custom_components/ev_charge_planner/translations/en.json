@@ -237,7 +237,7 @@
         }
       },
       "pv_surplus_forecast": {
-        "name": "Solar energy available for the car"
+        "name": "Solar energy available for the car today"
       },
       "house_baseline": {
         "name": "House consumption estimate"
