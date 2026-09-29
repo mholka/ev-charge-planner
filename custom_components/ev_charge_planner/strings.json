@@ -131,16 +131,32 @@
   "entity": {
     "binary_sensor": {
       "full_ready": {
-        "name": "Full: charged"
+        "name": "Full: charged",
+        "state": {
+          "on": "Yes",
+          "off": "No"
+        }
       },
       "quick_trip_ready": {
-        "name": "Quick trip: charged"
+        "name": "Quick trip: charged",
+        "state": {
+          "on": "Yes",
+          "off": "No"
+        }
       },
       "ready": {
-        "name": "Charged for trip"
+        "name": "Charged for trip",
+        "state": {
+          "on": "Yes",
+          "off": "No"
+        }
       },
-      "deadline_at_risk": {
-        "name": "Won't be ready by departure"
+      "ready_on_time": {
+        "name": "Will be ready on time",
+        "state": {
+          "on": "Yes",
+          "off": "No"
+        }
       }
     },
     "datetime": {
