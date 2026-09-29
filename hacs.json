@@ -1,4 +1,6 @@
 {
   "name": "EV Charge Planner",
-  "homeassistant": "2025.3.0"
+  "homeassistant": "2025.3.0",
+  "zip_release": true,
+  "filename": "ev_charge_planner.zip"
 }

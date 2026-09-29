@@ -68,9 +68,9 @@ To try your changes in Home Assistant, copy or symlink `custom_components/ev_cha
   - If stored config data changes shape, add a config entry migration.
 - **User-facing text** goes in `strings.json`, mirrored to `translations/en.json`. Name entities so a user understands them without the docs.
 - **Formatting and linting** are done by `ruff`, configured in `pyproject.toml`.
-- **Integration version:** bump `version` in `manifest.json` for releases (semantic versioning).
+- **Integration version:** don't bump `version` in `manifest.json` by hand. The release workflow stamps it from the release tag.
 - **The integration is read-only by design:** it plans but doesn't switch the wallbox. Proposals to control devices should be discussed in an issue first.
 
 ## Releases
 
-Maintainers tag releases as `vX.Y.Z` on `main` and publish a GitHub release with notes. HACS offers these releases to users.
+Maintainers tag releases as `vX.Y.Z` (or `vX.Y.Z-beta`) on `main` and publish a GitHub release with notes. Publishing runs `.github/workflows/release.yml`, which stamps the tag's version into `manifest.json` and attaches `ev_charge_planner.zip` to the release. HACS installs that zip (`zip_release` in `hacs.json`), so the version Home Assistant shows always matches the release.

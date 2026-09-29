@@ -1,0 +1,29 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  zip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stamp the release version into manifest.json
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version="${TAG#v}"
+          jq --arg v "$version" '.version = $v' \
+            custom_components/ev_charge_planner/manifest.json > manifest.tmp
+          mv manifest.tmp custom_components/ev_charge_planner/manifest.json
+      - name: Zip the integration
+        working-directory: custom_components/ev_charge_planner
+        run: zip -r "$GITHUB_WORKSPACE/ev_charge_planner.zip" . -x "__pycache__/*"
+      - name: Attach the zip to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" ev_charge_planner.zip --clobber
