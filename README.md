@@ -2,15 +2,22 @@
 
 Home Assistant custom integration that estimates **when your EV reaches a target** — full / charge limit, or the SoC needed for configured trips — when charging from **PV surplus** or from the **grid**. It also answers **"I need X by a deadline"** with the grid top-up and the latest time grid charging must start.
 
-The planner is read-only: it does not control the wallbox.
+The planner is read-only by design: it does not control the wallbox. Use its sensors in your own automations (or next to evcc) to decide when to charge.
+
+**You need:**
+- a state-of-charge sensor for the car (%)
+- PV power and house consumption sensors in **W**
+- the [Solcast PV Forecast](https://github.com/BJReplay/ha-solcast-solar) integration (forecast today / tomorrow sensors)
 
 ## Installation
 
-HACS → Integrations → ⋮ → Custom repositories → add `https://github.com/mholka/ev-charge-planner` (category *Integration*), install **EV Charge Planner**, restart HA.
+**HACS** (recommended):
+1. HACS → ⋮ → **Custom repositories** → add `https://github.com/mholka/ev-charge-planner`, type *Integration*.
+2. Search for **EV Charge Planner**, download it and restart Home Assistant.
 
-Manual: copy `custom_components/ev_charge_planner` into your `config/custom_components/`.
+**Manual:** download `ev_charge_planner.zip` from the [latest release](https://github.com/mholka/ev-charge-planner/releases/latest), unpack it into `config/custom_components/ev_charge_planner/` and restart Home Assistant.
 
-Requires Home Assistant 2025.3 or newer.
+Requires Home Assistant 2025.3 or newer. The integration icon shows in Home Assistant from 2026.3.
 
 ## Configuration
 
@@ -20,10 +27,10 @@ Settings → Devices & services → Add integration → **EV Charge Planner**. E
 |---|---|
 | Battery level | SoC sensor (%), e.g. Tesla battery level |
 | Charge limit | optional; target of the *full* scenario (defaults to 100 %) |
-| PV power | actual PV production (W); corrects the current forecast slot (now-cast) |
-| House consumption | household load **excluding** the wallbox (W) |
-| Wallbox power | optional; shown as an attribute |
-| Solcast forecast today / tomorrow | Solcast sensors with the `detailedForecast` attribute |
+| PV power | actual PV production (W); used instead of the forecast for the next 30 minutes |
+| House consumption | household load **excluding** the wallbox (W). If it includes the wallbox, charging counts as house load and hides the surplus |
+| Wallbox power | optional (W); shown as an attribute of *House consumption estimate* |
+| Solcast forecast today / tomorrow | Solcast sensors with the `detailedForecast` attribute (e.g. `sensor.solcast_pv_forecast_forecast_today`) |
 | Solcast forecast day 3+ | optional, several allowed (Solcast day 3–7 sensors); extends the PV horizon |
 | Battery capacity, consumption (km/kWh), efficiency | vehicle model; energy needed = ΔSoC × capacity / efficiency |
 | Charger min / max power | surplus below *min* is not used; charging never exceeds *max* |
@@ -44,17 +51,17 @@ Target SoC for a trip = `reserve + distance × (2 if round trip) / km_per_kWh / 
 
 ## Entities
 
-For *Full* and *Quick trip* (device **EV**, e.g. "Full: charging time on solar") and each saved trip (device **EV &lt;trip&gt;**):
+Each scenario has the same set of entities. *Full* and *Quick trip* live on the **EV** device, with the scenario as a name prefix (e.g. *Full: charging time on solar*). Each saved trip gets its own device, **EV &lt;trip&gt;**.
 
-| Entity | Meaning |
-|---|---|
-| `sensor.ev_<scenario>_energy_needed` | kWh the wallbox has to deliver (attributes: `target_soc`, `reachable`) |
-| `sensor.ev_<trip>_trip_energy` | kWh the trip itself uses, charging losses included; doesn't depend on SoC (quick trip and trips only) |
-| `sensor.ev_<scenario>_charge_time_grid` | charging time at max charger power (duration, like Waze travel time) |
-| `sensor.ev_<scenario>_charge_time_pv` | time the charger has to run on solar, nights excluded (attributes: `done_at`, `extrapolated`, `grid_topup_kwh`); `unknown` if the forecast has no usable surplus |
-| `sensor.ev_<scenario>_eta_grid` | done at max charger power |
-| `sensor.ev_<scenario>_eta_pv` | done on PV surplus only; `unknown` if not reached within the forecast |
-| `binary_sensor.ev_<scenario>_ready` (*Yes*/*No*) | SoC ≥ target |
+| Entity | Name | Meaning |
+|---|---|---|
+| `sensor.ev_<scenario>_energy_needed` | Energy to charge | kWh still to charge from the current SoC to the target; changes as the car drives and charges (attributes `target_soc`, `reachable`) |
+| `sensor.ev_<trip>_trip_energy` | Energy the trip uses | kWh the trip itself uses, charging losses included, whatever the SoC (quick trip and trips only) |
+| `sensor.ev_<scenario>_charge_time_grid` | Charging time on grid | charging time at max charger power |
+| `sensor.ev_<scenario>_charge_time_pv` | Charging time on solar | time the charger has to run on solar, nights excluded (attributes `done_at`, `extrapolated`, `grid_topup_kwh`); `unknown` if the forecast has no usable surplus |
+| `sensor.ev_<scenario>_eta_grid` | Ready at (grid) | done when charging at max charger power from now |
+| `sensor.ev_<scenario>_eta_pv` | Ready at (solar) | done on PV surplus only; `unknown` if not reached within the forecast |
+| `binary_sensor.ev_<scenario>_ready` | Charged (*Yes*/*No*) | SoC ≥ target |
 
 Deadline planning:
 
@@ -66,19 +73,52 @@ Deadline planning:
 | `sensor.ev_latest_grid_start` (*Start grid charging by*) | latest time to switch to full-power charging; `unknown` if solar suffices |
 | `binary_sensor.ev_ready_on_time` (*Will be ready on time*, *Yes*/*No*) | *Yes* while the departure target can still be met, at the latest by grid charging from now |
 
+Solar:
+
+| Entity | Name | Meaning |
+|---|---|---|
+| `sensor.ev_pv_phase` | Solar production phase | `before_production`, `producing`, `paused` (forecast says sun, but PV below 50 W) or `after_production` |
+
 Diagnostics:
-- `sensor.ev_house_baseline` (W; attributes `nowcast_factor`, `charging_power_w`)
-- `sensor.ev_pv_phase`: phase of the solar day, one of `before_production`, `producing`, `paused` (forecast says sun, but PV below 50 W) or `after_production`
-- `sensor.ev_pv_surplus_forecast` (*Solar energy available for the car today*): kWh the charger could take from PV surplus between now and midnight: the measured PV power for the next 30 minutes, then the forecast (attributes `tomorrow_kwh`, `horizon_kwh` for the whole forecast, `forecast_slots`, `horizon_end`, `peak_forecast_w`, `live_pv_w`, `no_forecast_data`, `entities_without_data`). If PV ETAs stay `unknown`, check this first.
+
+| Entity | Name | Meaning |
+|---|---|---|
+| `sensor.ev_pv_surplus_forecast` | Solar energy available for the car today | kWh the charger could take from PV surplus between now and midnight (attributes `tomorrow_kwh`, `horizon_kwh` for the whole forecast, `forecast_slots`, `horizon_end`, `peak_forecast_w`, `live_pv_w`, `no_forecast_data`, `entities_without_data`) |
+| `sensor.ev_house_baseline` | House consumption estimate | W used as house load (attributes `nowcast_factor`, `charging_power_w`) |
+
+### Example automation
+
+Notify when the car won't make it to departure on time:
+
+```yaml
+automation:
+  - alias: "EV won't be ready on time"
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.ev_ready_on_time
+        to: "off"
+    actions:
+      - action: notify.notify
+        data:
+          message: >
+            The car won't be ready by departure. Start grid charging now
+            ({{ states('sensor.ev_deadline_grid_topup') }} kWh from the grid).
+```
 
 ## How it works
 
-- **PV ETA**: walks forecast slots from now; surplus = forecast PV − house baseline (current slot scaled by actual/forecast PV, clamped 0.3–2). The charger runs at `min(surplus, max)` when surplus ≥ min; with phase switching it runs on one phase for smaller surplus; otherwise not at all. Forecast gaps count as no PV.
+- **PV ETA**: walks forecast slots from now; surplus = PV − house baseline. For the next 30 minutes the measured PV power replaces the forecast. The charger runs at `min(surplus, max)` when surplus ≥ min; with phase switching it runs on one phase for smaller surplus; otherwise not at all. Forecast gaps count as no PV.
 - **Deadline**: charge on PV surplus, then switch to full power at the latest moment *s* where `PV(now → s) + P_max × (deadline − s) ≥ energy needed`.
 - **PV charge time**: the charging hours from the same walk. If the target is beyond the forecast horizon, the remainder is extrapolated at the average PV charging power (`extrapolated: true`).
 - Updates every 5 minutes and immediately when SoC, charge limit, forecast, deadline or deadline scenario change.
 
 The calculation lives in `planner.py` without Home Assistant imports.
+
+## Troubleshooting
+
+- **Solar values stay `unknown` or 0.0 kWh**: check the attributes of *Solar energy available for the car today*. `no_forecast_data: true` or a non-empty `entities_without_data` means the Solcast sensors aren't configured or lack `detailedForecast`. `live_pv_w` should match your PV power in W. A surplus below the charger minimum counts as 0 (enable phase switching or lower the solar share if your wallbox charges on less).
+
+Report problems in [issues](https://github.com/mholka/ev-charge-planner/issues).
 
 ## Development
 
@@ -91,6 +131,13 @@ python3.13 -m venv .venv
 .venv/bin/pytest
 ```
 
-## Not yet supported
+## Limitations
 
-Charge taper above ~80 %, Forecast.Solar, Solcast p10/p90, wallbox control, dynamic tariffs.
+- Solcast is the only supported forecast (no Forecast.Solar yet), and only its `pv_estimate` (no p10/p90).
+- Power sensors must report W, not kW.
+- Charge taper above ~80 % and dynamic tariffs are not modelled.
+- Wallbox control is out of scope by design.
+
+## License
+
+[MIT](LICENSE)
