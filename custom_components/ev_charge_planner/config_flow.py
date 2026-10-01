@@ -23,6 +23,7 @@ from .const import (
     CONF_BASELINE_MODE,
     CONF_BASELINE_WINDOW_MIN,
     CONF_BATTERY_CAPACITY_KWH,
+    CONF_BATTERY_HEALTH_PCT,
     CONF_CHARGE_EFFICIENCY,
     CONF_CHARGE_LIMIT_ENTITY,
     CONF_CHARGER_MAX_POWER_1P_W,
@@ -85,6 +86,7 @@ def _number(
 
 _PARAM_SELECTORS: dict[str, selector.Selector] = {
     CONF_BATTERY_CAPACITY_KWH: _number(5, 250, 0.1, "kWh"),
+    CONF_BATTERY_HEALTH_PCT: _number(50, 100, 1, "%"),
     CONF_CONSUMPTION_KM_PER_KWH: _number(1, 15, 0.1, "km/kWh"),
     CONF_CHARGE_EFFICIENCY: _number(0.5, 1, 0.01),
     CONF_CHARGER_MIN_POWER_W: _number(0, 22000, 10, "W"),

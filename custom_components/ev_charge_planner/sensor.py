@@ -286,6 +286,8 @@ class ScenarioSensor(EvChargePlannerEntity, SensorEntity):
         if scenario is None:
             return None
         attrs = {"target_soc": scenario.target_soc, "reachable": scenario.reachable}
+        if scenario.trip_energy_kwh is not None:
+            attrs["minimum_soc"] = self.coordinator.vehicle.reserve_pct
         if self.entity_description.attrs_fn is not None:
             attrs |= self.entity_description.attrs_fn(scenario)
         return attrs

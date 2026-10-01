@@ -32,11 +32,12 @@ Settings → Devices & services → Add integration → **EV Charge Planner**. E
 | Wallbox power | optional (W); shown as an attribute of *House consumption estimate* |
 | Solcast forecast today / tomorrow | Solcast sensors with the `detailedForecast` attribute (e.g. `sensor.solcast_pv_forecast_forecast_today`) |
 | Solcast forecast day 3+ | optional, several allowed (Solcast day 3–7 sensors); extends the PV horizon |
-| Battery capacity, consumption (km/kWh), efficiency | vehicle model; energy needed = ΔSoC × capacity / efficiency |
+| Usable battery capacity (when new), consumption (km/kWh), efficiency | vehicle model; energy needed = ΔSoC × usable capacity / efficiency |
+| Battery health (SoH) | share of the original capacity still usable (default 100 %). 60 kWh at 95 % = 57 kWh usable, so a full charge from 0 % is 57 / 0.9 = 63.3 kWh from the wallbox |
 | Charger min / max power | surplus below *min* is not used; charging never exceeds *max* |
 | Minimum solar share | 100 % (default) = solar charging only from pure surplus. Lower values let the grid top up weak surplus to the charger minimum (like evcc's solar share); the grid part is reported as `grid_topup_kwh` |
 | Automatic 1/3-phase switching | if the wallbox drops to one phase on low surplus: PV counts from the single-phase minimum (≈1.4 kW) up to the single-phase maximum (≈3.7 kW); between that and the 3-phase minimum it stays at the single-phase maximum |
-| Arrival reserve | SoC to keep on arrival for trip scenarios |
+| Minimum battery level | battery level to arrive with on trips; on a round trip, the level you get home with. Also adjustable on the dashboard via `number.ev_minimum_soc` |
 | House baseline mode | **Rolling average** of house consumption over a window, or a **fixed** value in W |
 
 ### Quick trip
@@ -47,7 +48,7 @@ On the **EV** device set **Quick trip: distance (one way)** and **Quick trip: ro
 
 Each trip is a sub-entry: on the integration page choose **Add trip** (name, one-way distance, round trip). Trips can be edited or deleted at any time; their entities update without a restart.
 
-Target SoC for a trip = `reserve + distance × (2 if round trip) / km_per_kWh / capacity × 100`.
+Target SoC for a trip = `minimum battery level + distance × (2 if round trip) / km_per_kWh / (capacity × health) × 100`.
 
 ## Entities
 
