@@ -13,7 +13,13 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import EntityCategory, UnitOfEnergy, UnitOfPower, UnitOfTime
+from homeassistant.const import (
+    PERCENTAGE,
+    EntityCategory,
+    UnitOfEnergy,
+    UnitOfPower,
+    UnitOfTime,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -25,7 +31,7 @@ from .coordinator import (
     ScenarioResult,
 )
 from .entity import EvChargePlannerEntity, scenario_key
-from .planner import PV_PHASES
+from .planner import PV_PHASES, PvProjection
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -42,6 +48,48 @@ class PlannerSensorDescription(SensorEntityDescription):
 
     value_fn: Callable[[PlannerData], float | str | datetime | None]
     attrs_fn: Callable[[PlannerData], dict[str, Any]] | None = None
+
+
+def _departure_projection(data: PlannerData) -> PvProjection | None:
+    return data.projection if data.projection_to_departure else None
+
+
+def _pv_share(data: PlannerData) -> float | None:
+    projection = _departure_projection(data)
+    scenario = data.scenarios.get(data.projection_scenario or "")
+    if projection is None or scenario is None:
+        return None
+    if scenario.energy_needed_kwh <= 0:
+        return 100.0
+    return round(
+        min(100.0, projection.energy_kwh / scenario.energy_needed_kwh * 100), 1
+    )
+
+
+def _projection_attrs(data: PlannerData) -> dict[str, Any]:
+    projection = data.projection
+    if projection is None:
+        return {}
+    scenario = data.scenarios.get(data.projection_scenario or "")
+    return {
+        "until": projection.until,
+        "uncapped_kwh": round(projection.uncapped_kwh, 2),
+        "target_soc": None if scenario is None else scenario.target_soc,
+        "grid_topup_kwh": None
+        if data.deadline is None
+        else round(data.deadline.grid_topup_kwh, 2),
+        "projection": [
+            {
+                "time": p.time.isoformat(),
+                "pv_w": round(p.pv_w),
+                "surplus_w": round(p.surplus_w),
+                "charge_w": round(p.charge_w),
+                "energy_kwh": round(p.energy_kwh, 2),
+                "soc": round(p.soc, 1),
+            }
+            for p in projection.points
+        ],
+    }
 
 
 def _minutes(value: timedelta | None) -> float | None:
@@ -112,6 +160,31 @@ PLANNER_SENSORS = (
         key="latest_grid_start",
         device_class=SensorDeviceClass.TIMESTAMP,
         value_fn=lambda d: d.deadline.latest_grid_start if d.deadline else None,
+    ),
+    PlannerSensorDescription(
+        key="deadline_pv_energy",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
+        value_fn=lambda d: (
+            None if (p := _departure_projection(d)) is None else round(p.energy_kwh, 2)
+        ),
+        attrs_fn=_projection_attrs,
+    ),
+    PlannerSensorDescription(
+        key="deadline_soc_at_departure",
+        device_class=SensorDeviceClass.BATTERY,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=0,
+        value_fn=lambda d: (
+            None if (p := _departure_projection(d)) is None else round(p.soc, 1)
+        ),
+    ),
+    PlannerSensorDescription(
+        key="deadline_pv_share",
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=0,
+        value_fn=_pv_share,
     ),
     PlannerSensorDescription(
         key="pv_phase",
@@ -220,6 +293,9 @@ class ScenarioSensor(EvChargePlannerEntity, SensorEntity):
 
 class PlannerSensor(EvChargePlannerEntity, SensorEntity):
     """Deadline and diagnostic sensors."""
+
+    # Up to ~100 points; useful for cards, too big for the database.
+    _unrecorded_attributes = frozenset({"projection"})
 
     _platform_domain = "sensor"
 

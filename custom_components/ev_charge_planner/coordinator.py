@@ -51,6 +51,7 @@ from .forecast import merge_slots, parse_solcast
 from .planner import (
     ChargerParams,
     DeadlineResult,
+    PvProjection,
     Slot,
     VehicleParams,
     deadline_plan,
@@ -62,6 +63,7 @@ from .planner import (
     pv_energy_until,
     pv_eta,
     pv_phase,
+    pv_projection,
     trip_energy_kwh,
     trip_target_soc,
     with_live_pv,
@@ -117,6 +119,11 @@ class PlannerData:
     pv_phase: str
     scenarios: dict[str, ScenarioResult] = field(default_factory=dict)
     deadline: DeadlineResult | None = None
+    # PV charging for the "Charge for" scenario until departure, or over the
+    # whole forecast without a (future) departure time.
+    projection: PvProjection | None = None
+    projection_to_departure: bool = False
+    projection_scenario: str | None = None
 
 
 def entry_config(entry: ConfigEntry) -> dict[str, Any]:
@@ -350,6 +357,20 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
             )
 
         scenario = data.scenarios.get(self.deadline_scenario)
+        if scenario is not None:
+            to_departure = self.deadline is not None and self.deadline > now
+            data.projection_to_departure = to_departure
+            data.projection_scenario = self.deadline_scenario
+            data.projection = pv_projection(
+                now,
+                self.deadline if to_departure else horizon_end,
+                soc,
+                min(scenario.target_soc, 100.0),
+                slots,
+                baseline_w,
+                self.charger,
+                self.vehicle,
+            )
         if self.deadline is not None and scenario is not None:
             data.deadline = deadline_plan(
                 now,

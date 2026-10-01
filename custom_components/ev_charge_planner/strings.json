@@ -227,6 +227,15 @@
       "latest_grid_start": {
         "name": "Start grid charging by"
       },
+      "deadline_pv_energy": {
+        "name": "Solar energy by departure"
+      },
+      "deadline_soc_at_departure": {
+        "name": "Battery level at departure (solar only)"
+      },
+      "deadline_pv_share": {
+        "name": "Solar share of the charge"
+      },
       "pv_phase": {
         "name": "Solar production phase",
         "state": {

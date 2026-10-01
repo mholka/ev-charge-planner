@@ -372,3 +372,88 @@ def deadline_plan(
         else:
             hi = mid
     return DeadlineResult(energy_kwh - pv(lo), lo, lo <= now)
+
+
+@dataclass(frozen=True)
+class ProjectionPoint:
+    """State at `time`; the powers hold until the next point."""
+
+    time: datetime
+    pv_w: float
+    surplus_w: float
+    charge_w: float
+    energy_kwh: float
+    soc: float
+
+
+@dataclass(frozen=True)
+class PvProjection:
+    """PV surplus charging from now until `until`."""
+
+    until: datetime
+    energy_kwh: float
+    uncapped_kwh: float
+    soc: float
+    points: list[ProjectionPoint]
+
+
+def pv_projection(
+    now: datetime,
+    until: datetime,
+    soc: float,
+    target_soc: float,
+    slots: Sequence[Slot],
+    baseline_w: float,
+    charger: ChargerParams,
+    vehicle: VehicleParams,
+) -> PvProjection:
+    """Cumulative PV surplus charging and SoC, one point per slot (for graphs).
+
+    Charging stops once `target_soc` is reached; `uncapped_kwh` is what the
+    surplus would deliver if the battery took everything. Gaps between slots
+    and time past the last slot count as zero PV.
+    """
+    cap_kwh = energy_needed_kwh(soc, target_soc, vehicle)
+
+    def soc_at(energy_kwh: float) -> float:
+        return soc + energy_kwh * vehicle.efficiency / vehicle.capacity_kwh * 100
+
+    points: list[ProjectionPoint] = []
+    energy = 0.0
+    uncapped = 0.0
+    cursor = now
+
+    def add(time: datetime, pv_w: float, surplus_w: float, charge_w: float) -> None:
+        points.append(
+            ProjectionPoint(time, pv_w, surplus_w, charge_w, energy, soc_at(energy))
+        )
+
+    for slot in sorted(slots, key=lambda s: s.start):
+        start = max(slot.start, now)
+        end = min(slot.end, until)
+        if end <= start:
+            if slot.start >= until:
+                break
+            continue
+        if start > cursor:
+            add(cursor, 0.0, -baseline_w, 0.0)
+        surplus_w = slot.pv_w - baseline_w
+        power_w = surplus_charge_power(surplus_w, charger)
+        hours = (end - start).total_seconds() / 3600
+        uncapped += power_w / 1000 * hours
+        charge_w = power_w if energy < cap_kwh else 0.0
+        add(start, slot.pv_w, surplus_w, charge_w)
+        if charge_w > 0 and energy + charge_w / 1000 * hours >= cap_kwh:
+            # Target reached inside the slot: mark where charging stops.
+            full_at = start + timedelta(hours=(cap_kwh - energy) / (charge_w / 1000))
+            energy = cap_kwh
+            if full_at < end:
+                add(full_at, slot.pv_w, surplus_w, 0.0)
+        else:
+            energy += charge_w / 1000 * hours
+        cursor = end
+    if cursor < until:
+        add(cursor, 0.0, -baseline_w, 0.0)
+    if until > now:
+        add(until, 0.0, -baseline_w, 0.0)
+    return PvProjection(until, energy, uncapped, soc_at(energy), points)
