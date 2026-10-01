@@ -15,10 +15,12 @@ CONF_FORECAST_TOMORROW_ENTITY = "forecast_tomorrow_entity"
 CONF_FORECAST_EXTRA_ENTITIES = "forecast_extra_entities"
 
 CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"
+CONF_BATTERY_HEALTH_PCT = "battery_health_pct"
 CONF_CONSUMPTION_KM_PER_KWH = "consumption_km_per_kwh"
 CONF_CHARGE_EFFICIENCY = "charge_efficiency"
 CONF_CHARGER_MIN_POWER_W = "charger_min_power_w"
 CONF_CHARGER_MAX_POWER_W = "charger_max_power_w"
+# Shown as "Minimum battery level"; the key predates the rename.
 CONF_SOC_RESERVE_PCT = "soc_reserve_pct"
 CONF_PHASE_SWITCHING = "phase_switching"
 CONF_SOLAR_SHARE_PCT = "solar_share_pct"
@@ -43,6 +45,7 @@ MAIN_SCENARIOS = (SCENARIO_FULL, SCENARIO_QUICK_TRIP)
 
 DEFAULTS = {
     CONF_BATTERY_CAPACITY_KWH: 75.0,
+    CONF_BATTERY_HEALTH_PCT: 100.0,
     CONF_CONSUMPTION_KM_PER_KWH: 5.0,
     CONF_CHARGE_EFFICIENCY: 0.90,
     CONF_CHARGER_MIN_POWER_W: 4100.0,

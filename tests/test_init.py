@@ -312,3 +312,36 @@ async def test_solar_by_departure(hass: HomeAssistant) -> None:
     assert float(hass.states.get("sensor.ev_deadline_pv_share").state) == (
         pytest.approx(60.0, abs=0.5)
     )
+
+
+async def test_minimum_soc_number_updates_option(hass: HomeAssistant) -> None:
+    set_sources(hass, soc=50, limit=80)
+    entry = await _setup(hass, {"Office": 20})
+    assert float(hass.states.get("number.ev_minimum_soc").state) == 10
+    # Office: 40 km / 5 / 75 = 10.7 % + 10 %
+    office = hass.states.get("sensor.ev_office_energy_needed")
+    assert office.attributes["target_soc"] == pytest.approx(20.7, abs=0.1)
+    assert office.attributes["minimum_soc"] == 10
+
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {"entity_id": "number.ev_minimum_soc", "value": 45},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    assert entry.options["soc_reserve_pct"] == 45
+    assert float(hass.states.get("number.ev_minimum_soc").state) == 45
+    office = hass.states.get("sensor.ev_office_energy_needed")
+    assert office.attributes["target_soc"] == pytest.approx(55.7, abs=0.1)
+    # 5.7 % of 75 kWh / 0.9 still to charge
+    assert float(office.state) == pytest.approx(5.7 / 100 * 75 / 0.9, abs=0.05)
+
+
+async def test_battery_health(hass: HomeAssistant) -> None:
+    set_sources(hass, soc=50, limit=80)
+    await _setup(hass, extra={"battery_health_pct": 80})
+    # 30 % of 75 kWh * 0.8 / 0.9
+    assert float(
+        hass.states.get("sensor.ev_full_energy_needed").state
+    ) == pytest.approx(20.0)

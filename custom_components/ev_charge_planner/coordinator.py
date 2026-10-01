@@ -21,6 +21,7 @@ from .const import (
     CONF_BASELINE_MODE,
     CONF_BASELINE_WINDOW_MIN,
     CONF_BATTERY_CAPACITY_KWH,
+    CONF_BATTERY_HEALTH_PCT,
     CONF_CHARGE_EFFICIENCY,
     CONF_CHARGE_LIMIT_ENTITY,
     CONF_CHARGER_MAX_POWER_1P_W,
@@ -150,6 +151,7 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
             km_per_kwh=float(self.conf[CONF_CONSUMPTION_KM_PER_KWH]),
             efficiency=float(self.conf[CONF_CHARGE_EFFICIENCY]),
             reserve_pct=float(self.conf[CONF_SOC_RESERVE_PCT]),
+            health_pct=float(self.conf[CONF_BATTERY_HEALTH_PCT]),
         )
         self.charger = ChargerParams(
             p_min_w=float(self.conf[CONF_CHARGER_MIN_POWER_W]),

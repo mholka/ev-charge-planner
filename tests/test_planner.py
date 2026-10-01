@@ -49,6 +49,19 @@ def test_trip_target_soc() -> None:
     assert trip_target_soc(300, True, VEHICLE) > 100
 
 
+def test_battery_health_scales_usable_capacity() -> None:
+    worn = VehicleParams(
+        capacity_kwh=60, km_per_kwh=5, efficiency=0.9, reserve_pct=10, health_pct=95
+    )
+    assert worn.usable_kwh == pytest.approx(57)
+    # Full charge from 0 %: 57 kWh into the battery, 57 / 0.9 from the wallbox.
+    assert energy_needed_kwh(0, 100, worn) == pytest.approx(63.33, abs=0.01)
+    # 57 km = 11.4 kWh = 20 % of 57 kWh, + 10 % minimum battery level
+    assert trip_target_soc(57, False, worn) == pytest.approx(30)
+    # The trip itself uses the same energy whatever the battery health.
+    assert trip_energy_kwh(57, False, worn) == pytest.approx(11.4 / 0.9)
+
+
 def test_trip_energy() -> None:
     # 150 km round trip = 300 km / 5 km/kWh = 60 kWh at the battery, / 0.9 losses
     assert trip_energy_kwh(150, True, VEHICLE) == pytest.approx(60 / 0.9)

@@ -32,7 +32,15 @@ class VehicleParams:
     capacity_kwh: float
     km_per_kwh: float
     efficiency: float
+    # Minimum battery level (%) to arrive with on trips.
     reserve_pct: float = 0.0
+    # Battery health (SoH, %): share of the original capacity still usable.
+    health_pct: float = 100.0
+
+    @property
+    def usable_kwh(self) -> float:
+        """Usable capacity today: original capacity scaled by battery health."""
+        return self.capacity_kwh * self.health_pct / 100
 
 
 @dataclass(frozen=True)
@@ -100,7 +108,7 @@ def trip_target_soc(
 ) -> float:
     """SoC (%) needed to drive a trip and arrive with the reserve. May exceed 100."""
     km = distance_km * (2 if round_trip else 1)
-    return vehicle.reserve_pct + km / vehicle.km_per_kwh / vehicle.capacity_kwh * 100
+    return vehicle.reserve_pct + km / vehicle.km_per_kwh / vehicle.usable_kwh * 100
 
 
 def trip_energy_kwh(
@@ -113,7 +121,7 @@ def trip_energy_kwh(
 
 def energy_needed_kwh(soc: float, target_soc: float, vehicle: VehicleParams) -> float:
     """AC energy (kWh) needed to go from soc to target_soc."""
-    return max(0.0, target_soc - soc) / 100 * vehicle.capacity_kwh / vehicle.efficiency
+    return max(0.0, target_soc - soc) / 100 * vehicle.usable_kwh / vehicle.efficiency
 
 
 def grid_eta(now: datetime, energy_kwh: float, charger: ChargerParams) -> datetime:
@@ -416,7 +424,7 @@ def pv_projection(
     cap_kwh = energy_needed_kwh(soc, target_soc, vehicle)
 
     def soc_at(energy_kwh: float) -> float:
-        return soc + energy_kwh * vehicle.efficiency / vehicle.capacity_kwh * 100
+        return soc + energy_kwh * vehicle.efficiency / vehicle.usable_kwh * 100
 
     points: list[ProjectionPoint] = []
     energy = 0.0
