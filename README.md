@@ -72,6 +72,57 @@ Deadline planning:
 | `sensor.ev_deadline_grid_topup` (*Grid energy needed before departure*) | kWh that must come from the grid |
 | `sensor.ev_latest_grid_start` (*Start grid charging by*) | latest time to switch to full-power charging; `unknown` if solar suffices |
 | `binary_sensor.ev_ready_on_time` (*Will be ready on time*, *Yes*/*No*) | *Yes* while the departure target can still be met, at the latest by grid charging from now |
+| `sensor.ev_deadline_pv_energy` (*Solar energy by departure*) | kWh the charger can take from PV surplus between now and departure, capped at what the *Charge for* target needs (attributes `uncapped_kwh`, `target_soc`, `grid_topup_kwh`, `until`, `projection`) |
+| `sensor.ev_deadline_soc_at_departure` (*Battery level at departure (solar only)*) | SoC % at departure when charging from PV surplus only |
+| `sensor.ev_deadline_pv_share` (*Solar share of the charge*) | % of *Energy to charge* that PV covers by departure |
+
+These three are `unknown` without a future departure time. The `projection` attribute is always there: one point per forecast slot (`time`, `pv_w`, `surplus_w`, `charge_w`, cumulative `energy_kwh`, projected `soc`) until departure, or over the whole forecast without one. It isn't recorded in the database.
+
+#### Graph: solar charging until departure
+
+With [apexcharts-card](https://github.com/RomRider/apexcharts-card) (HACS):
+
+```yaml
+type: custom:apexcharts-card
+header:
+  show: true
+  title: Solar charging until departure
+graph_span: 24h
+span:
+  start: minute
+yaxis:
+  - id: kwh
+    min: 0
+  - id: soc
+    opposite: true
+    min: 0
+    max: 100
+series:
+  - entity: sensor.ev_deadline_pv_energy
+    name: Charged from solar
+    type: area
+    curve: stepline
+    yaxis_id: kwh
+    unit: kWh
+    data_generator: |
+      return entity.attributes.projection.map(p => [new Date(p.time).getTime(), p.energy_kwh]);
+  - entity: sensor.ev_deadline_pv_energy
+    name: Battery level
+    type: line
+    curve: smooth
+    yaxis_id: soc
+    unit: "%"
+    data_generator: |
+      return entity.attributes.projection.map(p => [new Date(p.time).getTime(), p.soc]);
+  - entity: sensor.ev_deadline_pv_energy
+    name: Target
+    type: line
+    yaxis_id: soc
+    unit: "%"
+    data_generator: |
+      const t = entity.attributes.target_soc;
+      return entity.attributes.projection.map(p => [new Date(p.time).getTime(), t]);
+```
 
 Solar:
 

@@ -23,6 +23,7 @@ from custom_components.ev_charge_planner.planner import (
     pv_energy_until,
     pv_eta,
     pv_phase,
+    pv_projection,
     surplus_charge_power,
     trip_energy_kwh,
     trip_target_soc,
@@ -345,3 +346,45 @@ def test_with_live_pv_without_forecast_or_measurement() -> None:
         Slot(NOW, NOW + timedelta(minutes=10), 6000),
         *slots,
     ]
+
+
+def test_pv_projection_caps_at_target_and_matches_energy() -> None:
+    # 8 kW for 4 h, 500 W baseline -> 7.5 kW surplus; 30 % SoC needs 25 kWh
+    forecast = slots(8000, 8000, 8000, 8000)
+    until = NOW + timedelta(hours=4)
+    proj = pv_projection(NOW, until, 50, 80, forecast, 500, CHARGER, VEHICLE)
+    assert proj.energy_kwh == pytest.approx(25.0)
+    assert proj.soc == pytest.approx(80.0)
+    assert proj.uncapped_kwh == pytest.approx(30.0)
+    assert proj.uncapped_kwh == pytest.approx(
+        pv_energy_until(NOW, until, forecast, 500, CHARGER)
+    )
+    assert proj.points[0].time == NOW
+    assert proj.points[0].charge_w == 7500
+    assert proj.points[-1].time == until
+    # Once the target is reached the charger stops.
+    assert proj.points[-2].charge_w == 0
+    energies = [p.energy_kwh for p in proj.points]
+    assert energies == sorted(energies)
+
+
+def test_pv_projection_gaps_short_forecast_and_past_until() -> None:
+    slots = [
+        Slot(NOW, NOW + timedelta(hours=1), 8000),
+        Slot(NOW + timedelta(hours=2), NOW + timedelta(hours=3), 8000),
+    ]
+    until = NOW + timedelta(hours=5)
+    proj = pv_projection(NOW, until, 50, 100, slots, 500, CHARGER, VEHICLE)
+    assert proj.energy_kwh == pytest.approx(15.0)
+    times = [p.time - NOW for p in proj.points]
+    assert times == [timedelta(hours=h) for h in (0, 1, 2, 3, 5)]
+    assert [p.charge_w for p in proj.points] == [7500, 0, 7500, 0, 0]
+
+    empty = pv_projection(
+        NOW, NOW - timedelta(hours=1), 50, 80, slots, 500, CHARGER, VEHICLE
+    )
+    assert empty.energy_kwh == 0
+    assert empty.points == []
+    assert (
+        pv_projection(NOW, until, 90, 80, slots, 500, CHARGER, VEHICLE).energy_kwh == 0
+    )

@@ -278,3 +278,37 @@ async def test_solar_energy_split_today_tomorrow(
     assert float(state.state) == pytest.approx(9.5 * 7.5, abs=0.1)
     assert state.attributes["tomorrow_kwh"] == pytest.approx(24 * 7.5, abs=0.1)
     assert state.attributes["horizon_kwh"] == pytest.approx(33.5 * 7.5, abs=0.1)
+
+
+async def test_solar_by_departure(hass: HomeAssistant) -> None:
+    set_sources(hass, soc=50, limit=80, pv_kw=8.0)
+    await _setup(hass)
+    # No departure: unknown, but the projection covers the forecast for graphs.
+    energy = hass.states.get("sensor.ev_deadline_pv_energy")
+    assert energy.state == "unknown"
+    assert energy.attributes["projection"]
+    assert hass.states.get("sensor.ev_deadline_pv_share").state == "unknown"
+
+    await hass.services.async_call(
+        "datetime",
+        "set_value",
+        {
+            "entity_id": "datetime.ev_deadline",
+            "datetime": dt_util.utcnow().replace(microsecond=0) + timedelta(hours=2),
+        },
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    # 7.5 kW surplus for 2 h = 15 of the 25 kWh needed; 15 * 0.9 / 75 = +18 % SoC
+    energy = hass.states.get("sensor.ev_deadline_pv_energy")
+    assert float(energy.state) == pytest.approx(15.0, abs=0.1)
+    assert energy.attributes["target_soc"] == 80.0
+    assert energy.attributes["projection"][-1]["energy_kwh"] == pytest.approx(
+        15.0, abs=0.1
+    )
+    assert float(
+        hass.states.get("sensor.ev_deadline_soc_at_departure").state
+    ) == pytest.approx(68.0, abs=0.2)
+    assert float(hass.states.get("sensor.ev_deadline_pv_share").state) == (
+        pytest.approx(60.0, abs=0.5)
+    )
