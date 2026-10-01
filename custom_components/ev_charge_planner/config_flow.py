@@ -107,25 +107,57 @@ _PARAM_SELECTORS: dict[str, selector.Selector] = {
 }
 
 
+# Form order: car, wallbox, solar and house, house baseline.
+_FIELD_ORDER = (
+    CONF_SOC_ENTITY,
+    CONF_BATTERY_CAPACITY_KWH,
+    CONF_BATTERY_HEALTH_PCT,
+    CONF_CHARGE_LIMIT_ENTITY,
+    CONF_CONSUMPTION_KM_PER_KWH,
+    CONF_SOC_RESERVE_PCT,
+    CONF_WALLBOX_POWER_ENTITY,
+    CONF_CHARGE_EFFICIENCY,
+    CONF_CHARGER_MIN_POWER_W,
+    CONF_CHARGER_MAX_POWER_W,
+    CONF_PHASE_SWITCHING,
+    CONF_CHARGER_MIN_POWER_1P_W,
+    CONF_CHARGER_MAX_POWER_1P_W,
+    CONF_SOLAR_SHARE_PCT,
+    CONF_PV_POWER_ENTITY,
+    CONF_HOUSE_LOAD_ENTITY,
+    CONF_FORECAST_ENTITY,
+    CONF_FORECAST_TOMORROW_ENTITY,
+    CONF_FORECAST_EXTRA_ENTITIES,
+    CONF_BASELINE_MODE,
+    CONF_BASELINE_WINDOW_MIN,
+    CONF_BASELINE_FIXED_W,
+)
+
+
 def _schema(values: dict[str, Any]) -> vol.Schema:
     """Full settings schema pre-filled with `values`."""
     fields: dict[Any, Any] = {}
-    for key in _REQUIRED_ENTITIES:
-        selector_ = _SENSOR_OR_NUMBER if key == CONF_SOC_ENTITY else _SENSOR
-        fields[vol.Required(key, default=values.get(key, vol.UNDEFINED))] = selector_
-    for key in _OPTIONAL_ENTITIES:
-        selector_ = {
-            CONF_CHARGE_LIMIT_ENTITY: _SENSOR_OR_NUMBER,
-            CONF_FORECAST_EXTRA_ENTITIES: _SENSORS_MULTI,
-        }.get(key, _SENSOR)
-        if values.get(key):
-            fields[vol.Optional(key, description={"suggested_value": values[key]})] = (
+    for key in _FIELD_ORDER:
+        if key in _REQUIRED_ENTITIES:
+            selector_ = _SENSOR_OR_NUMBER if key == CONF_SOC_ENTITY else _SENSOR
+            fields[vol.Required(key, default=values.get(key, vol.UNDEFINED))] = (
                 selector_
             )
+        elif key in _OPTIONAL_ENTITIES:
+            selector_ = {
+                CONF_CHARGE_LIMIT_ENTITY: _SENSOR_OR_NUMBER,
+                CONF_FORECAST_EXTRA_ENTITIES: _SENSORS_MULTI,
+            }.get(key, _SENSOR)
+            if values.get(key):
+                fields[
+                    vol.Optional(key, description={"suggested_value": values[key]})
+                ] = selector_
+            else:
+                fields[vol.Optional(key)] = selector_
         else:
-            fields[vol.Optional(key)] = selector_
-    for key, selector_ in _PARAM_SELECTORS.items():
-        fields[vol.Required(key, default=values.get(key, DEFAULTS[key]))] = selector_
+            fields[vol.Required(key, default=values.get(key, DEFAULTS[key]))] = (
+                _PARAM_SELECTORS[key]
+            )
     return vol.Schema(fields)
 
 
