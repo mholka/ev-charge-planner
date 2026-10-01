@@ -6,6 +6,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.ev_charge_planner.config_flow import (
+    _FIELD_ORDER,
+    _OPTIONAL_ENTITIES,
+    _PARAM_SELECTORS,
+    _REQUIRED_ENTITIES,
+    _schema,
+)
 from custom_components.ev_charge_planner.const import (
     CONF_BASELINE_FIXED_W,
     CONF_BASELINE_MODE,
@@ -134,3 +141,10 @@ async def test_trip_subentry_add_and_reconfigure(hass: HomeAssistant) -> None:
     # 75 km / 5 / 75 kWh = 20 % + 10 % reserve
     state = hass.states.get("sensor.ev_office_energy_needed")
     assert float(state.attributes["target_soc"]) == 30.0
+
+
+def test_form_order_covers_every_field() -> None:
+    keys = {*_REQUIRED_ENTITIES, *_OPTIONAL_ENTITIES, *_PARAM_SELECTORS}
+    assert set(_FIELD_ORDER) == keys
+    assert len(_FIELD_ORDER) == len(keys)
+    assert [str(k) for k in _schema({}).schema] == list(_FIELD_ORDER)
