@@ -187,6 +187,21 @@ PLANNER_SENSORS = (
         value_fn=_pv_share,
     ),
     PlannerSensorDescription(
+        key="consumption",
+        native_unit_of_measurement="km/kWh",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=2,
+        value_fn=lambda d: (
+            None if d.consumption is None else round(d.consumption.km_per_kwh, 2)
+        ),
+        attrs_fn=lambda d: {
+            "temperature_c": None
+            if d.consumption is None or d.consumption.temperature_c is None
+            else round(d.consumption.temperature_c, 1)
+        },
+    ),
+    PlannerSensorDescription(
         key="pv_phase",
         device_class=SensorDeviceClass.ENUM,
         options=list(PV_PHASES),

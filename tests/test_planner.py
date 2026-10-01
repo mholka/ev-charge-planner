@@ -24,6 +24,7 @@ from custom_components.ev_charge_planner.planner import (
     pv_eta,
     pv_phase,
     pv_projection,
+    seasonal_km_per_kwh,
     surplus_charge_power,
     trip_energy_kwh,
     trip_target_soc,
@@ -401,3 +402,12 @@ def test_pv_projection_gaps_short_forecast_and_past_until() -> None:
     assert (
         pv_projection(NOW, until, 90, 80, slots, 500, CHARGER, VEHICLE).energy_kwh == 0
     )
+
+
+def test_seasonal_km_per_kwh() -> None:
+    assert seasonal_km_per_kwh(6, 4, None) == 6
+    assert seasonal_km_per_kwh(6, 4, 25) == 6
+    assert seasonal_km_per_kwh(6, 4, 20) == 6
+    assert seasonal_km_per_kwh(6, 4, 10) == pytest.approx(5)
+    assert seasonal_km_per_kwh(6, 4, 0) == 4
+    assert seasonal_km_per_kwh(6, 4, -15) == 4

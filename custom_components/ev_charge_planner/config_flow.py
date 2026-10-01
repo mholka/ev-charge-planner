@@ -30,6 +30,7 @@ from .const import (
     CONF_CHARGER_MAX_POWER_W,
     CONF_CHARGER_MIN_POWER_1P_W,
     CONF_CHARGER_MIN_POWER_W,
+    CONF_CONSUMPTION_COLD_KM_PER_KWH,
     CONF_CONSUMPTION_KM_PER_KWH,
     CONF_DISTANCE_KM,
     CONF_FORECAST_ENTITY,
@@ -42,6 +43,7 @@ from .const import (
     CONF_SOC_ENTITY,
     CONF_SOC_RESERVE_PCT,
     CONF_SOLAR_SHARE_PCT,
+    CONF_TEMPERATURE_ENTITY,
     CONF_TRIP_NAME,
     CONF_WALLBOX_POWER_ENTITY,
     DEFAULTS,
@@ -55,6 +57,9 @@ _SENSOR_OR_NUMBER = selector.EntitySelector(
     selector.EntitySelectorConfig(domain=["sensor", "number", "input_number"])
 )
 
+_TEMPERATURE = selector.EntitySelector(
+    selector.EntitySelectorConfig(domain=["sensor", "weather"])
+)
 _SENSORS_MULTI = selector.EntitySelector(
     selector.EntitySelectorConfig(domain="sensor", multiple=True)
 )
@@ -70,6 +75,7 @@ _OPTIONAL_ENTITIES = (
     CONF_WALLBOX_POWER_ENTITY,
     CONF_FORECAST_TOMORROW_ENTITY,
     CONF_FORECAST_EXTRA_ENTITIES,
+    CONF_TEMPERATURE_ENTITY,
 )
 
 
@@ -88,6 +94,7 @@ _PARAM_SELECTORS: dict[str, selector.Selector] = {
     CONF_BATTERY_CAPACITY_KWH: _number(5, 250, 0.1, "kWh"),
     CONF_BATTERY_HEALTH_PCT: _number(50, 100, 1, "%"),
     CONF_CONSUMPTION_KM_PER_KWH: _number(1, 15, 0.1, "km/kWh"),
+    CONF_CONSUMPTION_COLD_KM_PER_KWH: _number(1, 15, 0.1, "km/kWh"),
     CONF_CHARGE_EFFICIENCY: _number(0.5, 1, 0.01),
     CONF_CHARGER_MIN_POWER_W: _number(0, 22000, 10, "W"),
     CONF_CHARGER_MAX_POWER_W: _number(1000, 22000, 10, "W"),
@@ -114,6 +121,8 @@ _FIELD_ORDER = (
     CONF_BATTERY_HEALTH_PCT,
     CONF_CHARGE_LIMIT_ENTITY,
     CONF_CONSUMPTION_KM_PER_KWH,
+    CONF_TEMPERATURE_ENTITY,
+    CONF_CONSUMPTION_COLD_KM_PER_KWH,
     CONF_SOC_RESERVE_PCT,
     CONF_WALLBOX_POWER_ENTITY,
     CONF_CHARGE_EFFICIENCY,
@@ -147,6 +156,7 @@ def _schema(values: dict[str, Any]) -> vol.Schema:
             selector_ = {
                 CONF_CHARGE_LIMIT_ENTITY: _SENSOR_OR_NUMBER,
                 CONF_FORECAST_EXTRA_ENTITIES: _SENSORS_MULTI,
+                CONF_TEMPERATURE_ENTITY: _TEMPERATURE,
             }.get(key, _SENSOR)
             if values.get(key):
                 fields[

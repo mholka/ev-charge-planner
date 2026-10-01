@@ -33,6 +33,7 @@ Settings → Devices & services → Add integration → **EV Charge Planner**. E
 | Solcast forecast today / tomorrow | Solcast sensors with the `detailedForecast` attribute (e.g. `sensor.solcast_pv_forecast_forecast_today`) |
 | Solcast forecast day 3+ | optional, several allowed (Solcast day 3–7 sensors); extends the PV horizon |
 | Usable battery capacity (when new), consumption (km/kWh), efficiency | vehicle model; energy needed = ΔSoC × usable capacity / efficiency |
+| Outdoor temperature, winter consumption | optional sensor or weather entity. With it, consumption moves linearly from the normal figure at 20 °C and above to the winter figure at 0 °C and below (10 °C with 6 and 4 km/kWh → 5 km/kWh). Without it, the normal figure always applies |
 | Battery health (SoH) | share of the original capacity still usable (default 100 %). 60 kWh at 95 % = 57 kWh usable, so a full charge from 0 % is 57 / 0.9 = 63.3 kWh from the wallbox |
 | Charger min / max power | surplus below *min* is not used; charging never exceeds *max* |
 | Minimum solar share | 100 % (default) = solar charging only from pure surplus. Lower values let the grid top up weak surplus to the charger minimum (like evcc's solar share); the grid part is reported as `grid_topup_kwh` |
@@ -136,6 +137,7 @@ Diagnostics:
 | Entity | Name | Meaning |
 |---|---|---|
 | `sensor.ev_pv_surplus_forecast` | Solar energy available for the car today | kWh the charger could take from PV surplus between now and midnight (attributes `tomorrow_kwh`, `horizon_kwh` for the whole forecast, `forecast_slots`, `horizon_end`, `peak_forecast_w`, `live_pv_w`, `no_forecast_data`, `entities_without_data`) |
+| `sensor.ev_consumption` | Consumption used for planning | km/kWh after the temperature correction (attribute `temperature_c`) |
 | `sensor.ev_house_baseline` | House consumption estimate | W used as house load (attributes `nowcast_factor`, `charging_power_w`) |
 
 ### Example automation
@@ -188,6 +190,7 @@ python3.13 -m venv .venv
 - Solcast is the only supported forecast (no Forecast.Solar yet), and only its `pv_estimate` (no p10/p90).
 - Power sensors must report W, not kW.
 - Charge taper above ~80 % and dynamic tariffs are not modelled.
+- The temperature correction uses the current outdoor temperature, not the forecast for the trip.
 - Wallbox control is out of scope by design.
 
 ## License
