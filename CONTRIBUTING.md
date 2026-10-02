@@ -66,7 +66,7 @@ To try your changes in Home Assistant, copy or symlink `custom_components/ev_cha
   - Keep existing entity IDs and unique IDs stable. Display names can change; IDs can't.
   - New options need defaults that keep the current behaviour.
   - If stored config data changes shape, add a config entry migration.
-- **User-facing text** goes in `strings.json`, mirrored to `translations/en.json`. Name entities so a user understands them without the docs.
+- **User-facing text** goes in `strings.json`. Then run `python scripts/gen_translations.py` to write `translations/en.json`: Home Assistant doesn't resolve `[%key:...%]` references for custom integrations, so the script does, and a test checks the two match. Name entities so a user understands them without the docs.
 - **Formatting and linting** are done by `ruff`, configured in `pyproject.toml`.
 - **Integration version:** don't bump `version` in `manifest.json` by hand. The release workflow stamps it from the release tag.
 - **The integration is read-only by design:** it plans but doesn't switch the wallbox. Proposals to control devices should be discussed in an issue first.
