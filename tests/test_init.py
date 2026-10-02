@@ -345,3 +345,48 @@ async def test_battery_health(hass: HomeAssistant) -> None:
     assert float(
         hass.states.get("sensor.ev_full_energy_needed").state
     ) == pytest.approx(20.0)
+
+
+@pytest.mark.parametrize(
+    ("entity_id", "state", "attributes", "km_per_kwh"),
+    [
+        ("sensor.outdoor", "10", {"unit_of_measurement": "°C"}, 4.5),
+        ("sensor.outdoor", "50", {"unit_of_measurement": "°F"}, 4.5),
+        ("sensor.outdoor", "unavailable", {}, 5.0),
+        (
+            "weather.home",
+            "sunny",
+            {"temperature": -3, "temperature_unit": "°C"},
+            4.0,
+        ),
+    ],
+)
+async def test_seasonal_consumption(
+    hass: HomeAssistant,
+    entity_id: str,
+    state: str,
+    attributes: dict,
+    km_per_kwh: float,
+) -> None:
+    set_sources(hass, soc=50, limit=80)
+    hass.states.async_set(entity_id, state, attributes)
+    await _setup(
+        hass,
+        {"Office": 20},
+        extra={"temperature_entity": entity_id, "consumption_cold_km_per_kwh": 4.0},
+    )
+    # Normal 5 km/kWh at 20 °C, 4 km/kWh at 0 °C
+    consumption = hass.states.get("sensor.ev_consumption")
+    assert float(consumption.state) == pytest.approx(km_per_kwh)
+    # Office: 40 km round trip
+    assert float(hass.states.get("sensor.ev_office_trip_energy").state) == (
+        pytest.approx(40 / km_per_kwh / 0.9, abs=0.01)
+    )
+
+
+async def test_consumption_without_temperature(hass: HomeAssistant) -> None:
+    set_sources(hass, soc=50, limit=80)
+    await _setup(hass)
+    consumption = hass.states.get("sensor.ev_consumption")
+    assert float(consumption.state) == 5.0
+    assert consumption.attributes["temperature_c"] is None

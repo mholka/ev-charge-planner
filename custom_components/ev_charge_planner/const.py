@@ -17,6 +17,8 @@ CONF_FORECAST_EXTRA_ENTITIES = "forecast_extra_entities"
 CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"
 CONF_BATTERY_HEALTH_PCT = "battery_health_pct"
 CONF_CONSUMPTION_KM_PER_KWH = "consumption_km_per_kwh"
+CONF_CONSUMPTION_COLD_KM_PER_KWH = "consumption_cold_km_per_kwh"
+CONF_TEMPERATURE_ENTITY = "temperature_entity"
 CONF_CHARGE_EFFICIENCY = "charge_efficiency"
 CONF_CHARGER_MIN_POWER_W = "charger_min_power_w"
 CONF_CHARGER_MAX_POWER_W = "charger_max_power_w"
@@ -47,6 +49,7 @@ DEFAULTS = {
     CONF_BATTERY_CAPACITY_KWH: 75.0,
     CONF_BATTERY_HEALTH_PCT: 100.0,
     CONF_CONSUMPTION_KM_PER_KWH: 5.0,
+    CONF_CONSUMPTION_COLD_KM_PER_KWH: 4.0,
     CONF_CHARGE_EFFICIENCY: 0.90,
     CONF_CHARGER_MIN_POWER_W: 4100.0,
     CONF_CHARGER_MAX_POWER_W: 11000.0,

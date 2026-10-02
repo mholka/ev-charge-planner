@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 import logging
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, UnitOfTemperature
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -28,6 +28,7 @@ from .const import (
     CONF_CHARGER_MAX_POWER_W,
     CONF_CHARGER_MIN_POWER_1P_W,
     CONF_CHARGER_MIN_POWER_W,
+    CONF_CONSUMPTION_COLD_KM_PER_KWH,
     CONF_CONSUMPTION_KM_PER_KWH,
     CONF_DISTANCE_KM,
     CONF_FORECAST_ENTITY,
@@ -40,6 +41,7 @@ from .const import (
     CONF_SOC_ENTITY,
     CONF_SOC_RESERVE_PCT,
     CONF_SOLAR_SHARE_PCT,
+    CONF_TEMPERATURE_ENTITY,
     CONF_WALLBOX_POWER_ENTITY,
     DEFAULTS,
     DOMAIN,
@@ -65,6 +67,7 @@ from .planner import (
     pv_eta,
     pv_phase,
     pv_projection,
+    seasonal_km_per_kwh,
     trip_energy_kwh,
     trip_target_soc,
     with_live_pv,
@@ -109,6 +112,14 @@ class ForecastSummary:
 
 
 @dataclass
+class ConsumptionSummary:
+    """Consumption the planner used and why."""
+
+    km_per_kwh: float
+    temperature_c: float | None
+
+
+@dataclass
 class PlannerData:
     """Everything the entities render."""
 
@@ -118,6 +129,7 @@ class PlannerData:
     charging_power_w: float | None
     forecast: ForecastSummary
     pv_phase: str
+    consumption: ConsumptionSummary | None = None
     scenarios: dict[str, ScenarioResult] = field(default_factory=dict)
     deadline: DeadlineResult | None = None
     # PV charging for the "Charge for" scenario until departure, or over the
@@ -242,6 +254,26 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
         except ValueError:
             return None
 
+    def _temperature_c(self) -> float | None:
+        """Outdoor temperature in °C from a sensor or weather entity."""
+        entity_id = self.conf.get(CONF_TEMPERATURE_ENTITY)
+        state = self.hass.states.get(entity_id) if entity_id else None
+        if state is None:
+            return None
+        if state.domain == "weather":
+            raw = state.attributes.get("temperature")
+            unit = state.attributes.get("temperature_unit")
+        else:
+            raw = state.state
+            unit = state.attributes.get("unit_of_measurement")
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return None
+        if unit == UnitOfTemperature.FAHRENHEIT:
+            return (value - 32) * 5 / 9
+        return value
+
     def _baseline_w(self, now: datetime) -> float:
         if self.conf[CONF_BASELINE_MODE] == BASELINE_FIXED:
             return float(self.conf[CONF_BASELINE_FIXED_W])
@@ -271,6 +303,13 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
             )
 
         limit = self._float_state(CONF_CHARGE_LIMIT_ENTITY)
+        temperature = self._temperature_c()
+        km_per_kwh = seasonal_km_per_kwh(
+            float(self.conf[CONF_CONSUMPTION_KM_PER_KWH]),
+            float(self.conf[CONF_CONSUMPTION_COLD_KM_PER_KWH]),
+            temperature,
+        )
+        self.vehicle = replace(self.vehicle, km_per_kwh=km_per_kwh)
         slots, missing = self._forecast_slots()
         baseline_w = self._baseline_w(now)
         pv_w = self._float_state(CONF_PV_POWER_ENTITY)
@@ -302,6 +341,7 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
                 ),
                 entities_without_data=missing,
             ),
+            consumption=ConsumptionSummary(km_per_kwh, temperature),
             pv_phase=pv_phase(now, pv_w, forecast_slots, day_start, day_end),
         )
 

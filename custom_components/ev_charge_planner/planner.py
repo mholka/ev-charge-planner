@@ -103,6 +103,23 @@ class DeadlineResult:
     at_risk: bool
 
 
+# Seasonal consumption: the normal figure applies from MILD_C up, the winter
+# figure at COLD_C and below, linear in between.
+SEASONAL_MILD_C = 20.0
+SEASONAL_COLD_C = 0.0
+
+
+def seasonal_km_per_kwh(
+    normal_km_per_kwh: float, cold_km_per_kwh: float, temperature_c: float | None
+) -> float:
+    """Consumption for the outdoor temperature; normal without a temperature."""
+    if temperature_c is None:
+        return normal_km_per_kwh
+    share = (SEASONAL_MILD_C - temperature_c) / (SEASONAL_MILD_C - SEASONAL_COLD_C)
+    share = min(1.0, max(0.0, share))
+    return normal_km_per_kwh + (cold_km_per_kwh - normal_km_per_kwh) * share
+
+
 def trip_target_soc(
     distance_km: float, round_trip: bool, vehicle: VehicleParams
 ) -> float:
