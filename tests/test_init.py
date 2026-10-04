@@ -1,11 +1,14 @@
 """Setup, entities and deadline tests."""
 
 from datetime import timedelta
+import json
+import logging
 
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import ConfigEntryState, ConfigSubentryData
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.json import JSONEncoder
 from homeassistant.util import dt as dt_util
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -15,6 +18,9 @@ from custom_components.ev_charge_planner.const import (
     CONF_ROUND_TRIP,
     DOMAIN,
     SUBENTRY_TRIP,
+)
+from custom_components.ev_charge_planner.diagnostics import (
+    async_get_config_entry_diagnostics,
 )
 
 from .common import CONFIG, ENTITIES, set_sources
@@ -390,3 +396,28 @@ async def test_consumption_without_temperature(hass: HomeAssistant) -> None:
     consumption = hass.states.get("sensor.ev_consumption")
     assert float(consumption.state) == 5.0
     assert consumption.attributes["temperature_c"] is None
+
+
+async def test_diagnostics(hass: HomeAssistant) -> None:
+    set_sources(hass, soc=50, limit=80, pv_kw=8.0)
+    entry = await _setup(hass, {"Office": 20})
+    diag = await async_get_config_entry_diagnostics(hass, entry)
+    # Must be JSON-serialisable the way Home Assistant writes it.
+    json.dumps(diag, cls=JSONEncoder)
+    assert diag["config"]["soc_entity"] == "sensor.tesla_battery"
+    assert diag["sources"]["sensor.tesla_battery"]["state"] == "50"
+    forecast = diag["sources"]["sensor.solcast_today"]["attributes"]
+    assert forecast["detailedForecast"] == "48 items"
+    assert diag["planner"]["soc"] == 50
+    assert set(diag["planner"]["scenarios"]) >= {"full", "quick_trip"}
+    assert [t["title"] for t in diag["trips"].values()] == ["Office"]
+
+
+async def test_debug_log(hass: HomeAssistant, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.DEBUG, logger="custom_components.ev_charge_planner")
+    set_sources(hass, soc=50, limit=80)
+    hass.states.async_set("sensor.pv_power", "unavailable")
+    await _setup(hass)
+    assert "pv_power_entity (sensor.pv_power) has no value: unavailable" in caplog.text
+    assert "Inputs: SoC 50.0 %" in caplog.text
+    assert "Scenario full: target 80.0 %" in caplog.text
