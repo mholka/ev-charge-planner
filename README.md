@@ -140,6 +140,12 @@ Diagnostics:
 | `sensor.ev_consumption` | Consumption used for planning | km/kWh after the temperature correction (attribute `temperature_c`) |
 | `sensor.ev_house_baseline` | House consumption estimate | W used as house load (attributes `nowcast_factor`, `charging_power_w`) |
 
+### Notification blueprint
+
+[![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fmholka%2Fev-charge-planner%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fmholka%2Fev_charge_planner_notify.yaml)
+
+Sends a phone notification (Companion app) when grid charging has to start (*Start grid charging by*), and when the car won't be ready on time even at full power. Both can be turned off separately. Needs a departure time.
+
 ### Example automation
 
 Notify when the car won't make it to departure on time:

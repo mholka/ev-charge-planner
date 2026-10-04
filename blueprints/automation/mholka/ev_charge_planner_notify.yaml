@@ -1,0 +1,93 @@
+blueprint:
+  name: EV Charge Planner notifications
+  description: >-
+    Notifies a phone when grid charging has to start for the car to be ready
+    by departure, and when it won't be ready on time even with full grid
+    power. Uses the EV Charge Planner integration's departure sensors.
+  domain: automation
+  source_url: https://github.com/mholka/ev-charge-planner/blob/main/blueprints/automation/mholka/ev_charge_planner_notify.yaml
+  author: mholka
+  homeassistant:
+    min_version: 2025.3.0
+  input:
+    notify_device:
+      name: Phone
+      description: Device with the Home Assistant Companion app.
+      selector:
+        device:
+          filter:
+            integration: mobile_app
+    latest_grid_start:
+      name: Start grid charging by
+      default: sensor.ev_latest_grid_start
+      selector:
+        entity:
+          filter:
+            integration: ev_charge_planner
+            domain: sensor
+    ready_on_time:
+      name: Will be ready on time
+      default: binary_sensor.ev_ready_on_time
+      selector:
+        entity:
+          filter:
+            integration: ev_charge_planner
+            domain: binary_sensor
+    grid_topup:
+      name: Grid energy needed before departure
+      default: sensor.ev_deadline_grid_topup
+      selector:
+        entity:
+          filter:
+            integration: ev_charge_planner
+            domain: sensor
+    notify_start:
+      name: Notify when grid charging must start
+      default: true
+      selector:
+        boolean:
+    notify_late:
+      name: Notify when the car won't be ready on time
+      default: true
+      selector:
+        boolean:
+
+mode: queued
+
+variables:
+  notify_start: !input notify_start
+  notify_late: !input notify_late
+  grid_topup: !input grid_topup
+
+triggers:
+  - trigger: time
+    at: !input latest_grid_start
+    id: start
+  - trigger: state
+    entity_id: !input ready_on_time
+    from: "on"
+    to: "off"
+    id: late
+
+conditions:
+  - condition: template
+    value_template: >-
+      {{ (trigger.id == 'start' and notify_start)
+         or (trigger.id == 'late' and notify_late) }}
+
+actions:
+  - domain: mobile_app
+    type: notify
+    device_id: !input notify_device
+    title: >-
+      {{ 'Start charging the car' if trigger.id == 'start'
+         else "The car won't be ready on time" }}
+    message: >-
+      {% set kwh = states(grid_topup) %}
+      {% if trigger.id == 'start' %}
+        Solar alone isn't enough: start grid charging now to be ready by
+        departure ({{ kwh }} kWh from the grid).
+      {% else %}
+        Even at full power from now the target can't be reached by departure.
+        Grid energy needed: {{ kwh }} kWh.
+      {% endif %}
