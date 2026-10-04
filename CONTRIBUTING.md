@@ -8,7 +8,7 @@ Open an [issue](https://github.com/mholka/ev-charge-planner/issues) first for an
 
 - Home Assistant and integration versions
 - Your configuration (options screen), with entity names anonymised if you prefer
-- The values of the relevant sensors, e.g. *Solar energy available for the car* and its attributes
+- The diagnostics file: Settings → Devices & services → EV Charge Planner → ⋮ → *Download diagnostics*
 - Debug logs, if relevant:
 
   ```yaml

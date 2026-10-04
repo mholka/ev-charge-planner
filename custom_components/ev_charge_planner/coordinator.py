@@ -45,6 +45,7 @@ from .const import (
     CONF_WALLBOX_POWER_ENTITY,
     DEFAULTS,
     DOMAIN,
+    MAIN_SCENARIOS,
     SCENARIO_FULL,
     SCENARIO_QUICK_TRIP,
     SUBENTRY_TRIP,
@@ -248,10 +249,17 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
             return None
         state = self.hass.states.get(entity_id)
         if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            _LOGGER.debug(
+                "%s (%s) has no value: %s",
+                key,
+                entity_id,
+                "missing" if state is None else state.state,
+            )
             return None
         try:
             return float(state.state)
         except ValueError:
+            _LOGGER.debug("%s (%s) isn't numeric: %r", key, entity_id, state.state)
             return None
 
     def _temperature_c(self) -> float | None:
@@ -269,6 +277,7 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
         try:
             value = float(raw)
         except (TypeError, ValueError):
+            _LOGGER.debug("Temperature (%s) isn't numeric: %r", entity_id, raw)
             return None
         if unit == UnitOfTemperature.FAHRENHEIT:
             return (value - 32) * 5 / 9
@@ -291,6 +300,7 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
             slots = parse_solcast(state.attributes) if state else []
             if not slots:
                 missing.append(entity_id)
+            _LOGGER.debug("Forecast %s: %d slots", entity_id, len(slots))
             slot_lists.append(slots)
         return merge_slots(*slot_lists), missing
 
@@ -422,4 +432,48 @@ class EvChargePlannerCoordinator(DataUpdateCoordinator[PlannerData]):
                 baseline_w,
                 self.charger,
             )
+        self._log_summary(data, pv_w, len(forecast_slots))
         return data
+
+    def _log_summary(self, data: PlannerData, pv_w: float | None, slots: int) -> None:
+        if not _LOGGER.isEnabledFor(logging.DEBUG):
+            return
+        consumption = data.consumption
+        _LOGGER.debug(
+            "Inputs: SoC %.1f %%, PV %s W, house baseline %.0f W, %s km/kWh "
+            "(temperature %s °C), %d forecast slots",
+            data.soc,
+            pv_w,
+            data.baseline_w,
+            None if consumption is None else round(consumption.km_per_kwh, 2),
+            None if consumption is None else consumption.temperature_c,
+            slots,
+        )
+        _LOGGER.debug(
+            "Solar for the car: today %.2f kWh, tomorrow %.2f kWh, horizon %.2f kWh",
+            data.forecast.today_kwh,
+            data.forecast.tomorrow_kwh,
+            data.forecast.horizon_kwh,
+        )
+        for scenario_id, s in data.scenarios.items():
+            _LOGGER.debug(
+                "Scenario %s: target %.1f %%, %.2f kWh to charge, "
+                "ready at %s (grid) / %s (solar)",
+                s.name
+                if scenario_id in MAIN_SCENARIOS
+                else f"{s.name} ({scenario_id})",
+                s.target_soc,
+                s.energy_needed_kwh,
+                s.eta_grid,
+                s.eta_pv,
+            )
+        if data.deadline is not None:
+            _LOGGER.debug(
+                "Departure %s for %s: grid top-up %.2f kWh, latest grid start %s, "
+                "at risk %s",
+                self.deadline,
+                self.deadline_scenario,
+                data.deadline.grid_topup_kwh,
+                data.deadline.latest_grid_start,
+                data.deadline.at_risk,
+            )
