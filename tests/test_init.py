@@ -16,6 +16,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.ev_charge_planner.const import (
     CONF_DISTANCE_KM,
     CONF_ROUND_TRIP,
+    CONF_SOC_ENTITY,
     DOMAIN,
     SUBENTRY_TRIP,
 )
@@ -410,7 +411,39 @@ async def test_diagnostics(hass: HomeAssistant) -> None:
     assert forecast["detailedForecast"] == "48 items"
     assert diag["planner"]["soc"] == 50
     assert set(diag["planner"]["scenarios"]) >= {"full", "quick_trip"}
-    assert [t["title"] for t in diag["trips"].values()] == ["Office"]
+    assert [t["label"] for t in diag["trips"].values()] == ["Trip 1"]
+    assert "Office" not in json.dumps(diag, cls=JSONEncoder)
+
+
+async def test_diagnostics_omits_personal_attributes(hass: HomeAssistant) -> None:
+    set_sources(hass, soc=50, limit=80, pv_kw=8.0)
+    hass.states.async_set(
+        ENTITIES[CONF_SOC_ENTITY],
+        "50",
+        {
+            "unit_of_measurement": "%",
+            "device_class": "battery",
+            "state_class": "measurement",
+            "friendly_name": "Jan's Tesla",
+            "vin": "5YJ3E1EA7KF000316",
+            "latitude": 52.37,
+            "longitude": 4.89,
+        },
+    )
+    entry = await _setup(hass, {"Grandma's house": 120})
+    diag = await async_get_config_entry_diagnostics(hass, entry)
+    dumped = json.dumps(diag, cls=JSONEncoder)
+
+    attributes = diag["sources"]["sensor.tesla_battery"]["attributes"]
+    assert attributes == {
+        "unit_of_measurement": "%",
+        "device_class": "battery",
+        "state_class": "measurement",
+    }
+    for leaked in ("Jan's Tesla", "5YJ3E1EA7KF000316", "52.37", "Grandma"):
+        assert leaked not in dumped
+    trip_id = next(iter(diag["trips"]))
+    assert diag["planner"]["scenarios"][trip_id]["name"] == "Trip 1"
 
 
 async def test_debug_log(hass: HomeAssistant, caplog: pytest.LogCaptureFixture) -> None:

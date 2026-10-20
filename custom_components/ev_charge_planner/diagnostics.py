@@ -8,8 +8,18 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
+from .const import CONF_DISTANCE_KM, CONF_ROUND_TRIP, MAIN_SCENARIOS
 from .coordinator import EvChargePlannerConfigEntry
 
+# Source entities come from other integrations and can carry personal data
+# (VIN, location, names), so only these attributes are copied.
+_SOURCE_ATTRIBUTES = (
+    "unit_of_measurement",
+    "device_class",
+    "state_class",
+    "temperature",
+    "temperature_unit",
+)
 # Big attributes (forecast lists) are summarised instead of copied.
 _LIST_ATTRIBUTES = ("detailedForecast", "detailedHourly")
 
@@ -40,9 +50,17 @@ async def async_get_config_entry_diagnostics(
                 sources[entity_id] = {"setting": key, "state": None}
                 continue
             attributes = {
-                name: f"{len(attr)} items" if name in _LIST_ATTRIBUTES else attr
-                for name, attr in state.attributes.items()
+                name: state.attributes[name]
+                for name in _SOURCE_ATTRIBUTES
+                if name in state.attributes
             }
+            attributes.update(
+                {
+                    name: f"{len(state.attributes[name])} items"
+                    for name in _LIST_ATTRIBUTES
+                    if name in state.attributes
+                }
+            )
             sources[entity_id] = {
                 "setting": key,
                 "state": state.state,
@@ -50,10 +68,30 @@ async def async_get_config_entry_diagnostics(
                 "last_updated": state.last_updated,
             }
 
+    # Trip names are free text; they are replaced by "Trip N" here.
+    trip_labels = {
+        trip_id: f"Trip {number}"
+        for number, trip_id in enumerate(coordinator.trips, start=1)
+    }
+    trips = {
+        trip_id: {
+            "label": trip_labels[trip_id],
+            CONF_DISTANCE_KM: trip[CONF_DISTANCE_KM],
+            CONF_ROUND_TRIP: trip.get(CONF_ROUND_TRIP),
+        }
+        for trip_id, trip in coordinator.trips.items()
+    }
+
     data = coordinator.data
+    planner = None if data is None else _jsonable(asdict(data))
+    if planner is not None:
+        for scenario_id, scenario in planner["scenarios"].items():
+            if scenario_id not in MAIN_SCENARIOS:
+                scenario["name"] = trip_labels.get(scenario_id, "Trip")
+
     return {
         "config": coordinator.conf,
-        "trips": coordinator.trips,
+        "trips": trips,
         "runtime": {
             "deadline": coordinator.deadline,
             "deadline_scenario": coordinator.deadline_scenario,
@@ -65,5 +103,5 @@ async def async_get_config_entry_diagnostics(
             else None,
         },
         "sources": sources,
-        "planner": None if data is None else _jsonable(asdict(data)),
+        "planner": planner,
     }
