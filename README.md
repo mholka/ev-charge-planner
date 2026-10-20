@@ -178,7 +178,7 @@ The calculation lives in `planner.py` without Home Assistant imports.
 
 - **Solar values stay `unknown` or 0.0 kWh**: check the attributes of *Solar energy available for the car today*. `no_forecast_data: true` or a non-empty `entities_without_data` means the Solcast sensors aren't configured or lack `detailedForecast`. `live_pv_w` should match your PV power in W. A surplus below the charger minimum counts as 0 (enable phase switching or lower the solar share if your wallbox charges on less).
 
-- **Diagnostics**: Settings → Devices & services → EV Charge Planner → ⋮ → **Download diagnostics**. The file has your settings, the source entity states and the latest planner result; attach it to bug reports.
+- **Diagnostics**: Settings → Devices & services → EV Charge Planner → ⋮ → **Download diagnostics**. The file has your settings, the source entity states and the latest planner result; attach it to bug reports. Source entities contribute only their units, device/state class and temperature attributes, and trips appear as `Trip 1`, `Trip 2`, … instead of their names.
 - **Debug logs**: they show the inputs (SoC, PV, house baseline, consumption, forecast slots) and each scenario's result on every update.
 
   ```yaml
